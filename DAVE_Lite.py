@@ -36,53 +36,12 @@ def debug(status):    #Replaces print
     if(DEBUG_MODE):
         print("[DEBUG @"+formattedTime()+"] : "+status)
 
-def readArduinoSensor(name):
-    if name in arduinoData:
-        return arduinoData[name]
-
 def formatState(state):
     if(type(state) is float):
         return "{:.2f}".format(state)
     else:
         return str(state)
-    
-def pHPumpControl(pump, constant, actuator, phvar):
-    thread.start_new_thread(pHPumpControl, (pump, constant, actuator, phvar))
 
-def _pHPumpControl(pump, constant, actuator, phvar):
-	actuator.busy = True
-	#-- BODY --#
-	#Get amount to pump
-	mL = getPHAdjustAmount(phvar.current, (phvar.min+phvar.max)/2, constant)
-	#Get time to hold pump open
-	holdTime = getPumpHoldTime(mL)
-	pump.on()
-	delay(holdTime)
-	pump.off()
-	pump.busy = False
- 
-def nutrientPumpControl(actuator, pump):
-        thread.start_new_thread(nutrientPumpControl, (pump, amount))
-
-def _nutrientPumpControl(actuator, pump, constant):
-	pump.busy = True
-	#-- BODY --#
-	#Get amount to pump
-	mL = getPHAdjustAmount(phvar.current, (phvar.min+phvar.max)/2, constant)
-	#Get time to hold pump open
-	holdTime = getPumpHoldTime(mL)
-	pump.on()
-	delay(holdTime)
-	pump.off()
-	pump.busy = False
-
-def getPHAdjustAmount(current, target, constant):
-    currentH = 10**(-current)
-    targetH = 10**(-target)
-    deltaH = targetH - currentH
-    currentC = currentH**2/constant
-    targetC = targetH**2/constant
-    deltaC = targetC + deltaH - currentC
 
 def setup1Wire(directory, prefix):
     debug("Setting up 1-Wire device with prefix '"+str(prefix)+"'...")
@@ -96,12 +55,13 @@ def setup1Wire(directory, prefix):
             if(f.startswith(prefix)):
                 debug("Found '"+f+"'!")
                 global wirefile
-                wirefile = open(f+'/w1_slave', 'r') #open slave data file
+                wirefile = f+'/w1_slave' #save path
 
 def read1Wire(marker):
     debug("Reading 1-Wire device...")
     if(wirefile != None):
-        lines = wirefile.readlines()
+        file = open(wirefile, 'r')
+        lines = file.readlines()
                 #for line in lines:
                     #print(line)
                 #while lines[0].strip[-3:] != 'YES': #wait for YES signal
@@ -115,6 +75,7 @@ def read1Wire(marker):
                 debug("Raw line: '"+l+"'")
                 l = int(l[temp+2:])
                 debug("Raw data: '"+str(l)+"'")
+                file.close()
                 return l/1000.0  #return C
         except:
             debug("No marker '"+marker+"' found in file!")
@@ -228,22 +189,14 @@ waterlevel = Button(17)
 pumpWaterIn = DigitalOutputDevice(6)
 airCooler = DigitalOutputDevice(22)
 waterCooler = DigitalOutputDevice(27)
-pumpPHUp = DigitalOutputDevice(18)
-pumpPHDown = DigitalOutputDevice(23)
-pumpNutrients = DigitalOutputDevice(24)
 
 #Name, functions to call if {too low, in range, too high}
 #OPTIONALLY: KEYWORDED boolean setting 3-tuples to pass envvar and/or the actuator object to the respective function (passActuator, passEnvVar)
 #OPTIONALLY: KEYWORDED lists for additional arguments for each function (args0 to 2)
-actuators=[ Actuator("Water In Pump", pumpWaterIn.on, pumpWaterIn.off, None),
-            Actuator("Air Cooler", None, airCooler.off, airCooler.on),
-            Actuator("Water Cooler", None, waterCooler.off, waterCooler.on),
-            Actuator("pH Pumps", pHPumpControl, lambda: (pumpPHUp.off(), pumpPHDown.off()), pHPumpControl, 
-                     passActuator = (True, False, True), passEnvVar = (True, False, True), 
-                     args0 = [pumpPHUp, PHUP_DISSCONSTANT], args2 = [pumpPHDown, PHDOWN_DISSCONSTANT]),
-            Actuator("Nutrient Pumps", nutrientPumpControl, lambda: (pumpNutrientA.off(), pumpNutrientB.off(), pumpNutrientCalMag.off()), nutrientPumpControl,
-                     passActuator = (True, False, True), passEnvVar = (True, False, True), 
-                     args0 = [pumpPHUp, PHUP_DISSCONSTANT], args2 = [pumpPHDown, PHDOWN_DISSCONSTANT])
+actuators=[ 
+    Actuator("Water In Pump", pumpWaterIn.on, pumpWaterIn.off, None),
+    Actuator("Air Cooler", None, airCooler.off, airCooler.on),
+    Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)
 ]
 
 #Name, Environment variable, Delay in ms, Read function and args
@@ -251,19 +204,15 @@ sensors = [
     Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0),
     Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1),
     Sensor("Float Sensor", 500, floatSensorInvert, waterlevel),
-    Sensor("Water Thermometer", 1000, read1Wire, 't='),
-    Sensor("Arduino-pH Probe", 1000, readArduinoSensor, 'pH'),
-    Sensor("Arduino-Conductivity Probe", 1000, readArduinoSensor, 'Conductivity')
+    Sensor("Water Thermometer", 1000, read1Wire, 't=')
 ]
 
 #Name, Homeostasis minimum and maximum values, sensor, actuator
 environmentVariables = [ 
-    EnvironmentVariable("Air Humidity", 80, 100, sensors[0], None),
-    EnvironmentVariable("Air Temperature", 12, 15, sensors[1], actuators[1]),
+    EnvironmentVariable("Air Humidity (%H)", 80, 100, sensors[0], None),
+    EnvironmentVariable("Air Temperature (C)", 12, 14, sensors[1], actuators[1]),
     EnvironmentVariable("Water Level", 0, 1, sensors[2], actuators[0]),
-    EnvironmentVariable("Water Temperature", 10, 12, sensors[3], actuators[2]),
-    EnvironmentVariable("pH", 6.1, 6.5, sensors[4], actuators[3]),
-    EnvironmentVariable("Conductivity", 1300, 1600, sensors[4], actuators[4])
+    EnvironmentVariable("Water Temperature (C)", 10, 12, sensors[3], actuators[2])
 ]
             
 #Main
@@ -275,6 +224,6 @@ while True:
     for envvar in environmentVariables:
         envvar.update()    #Sense
         if(envvar.actuator != None):
-            envvar.actuator.actuate(envvar) #plan, act\
+            envvar.actuator.actuate(envvar) #Plan, Act
         print(envvar.name+": "+formatState(envvar.current))
         sleep(1)

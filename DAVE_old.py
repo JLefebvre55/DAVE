@@ -16,19 +16,24 @@ import json
 
 
 #Constants
-DEBUG_MODE = True    #Print everything?
+DEBUG_MODE = False    #Print everything?
+SYSTEM_VOLUME = 10	#in liters
+PHDOWN_DISSCONSTANT = 10**-2.15 #Weak acid (H3PO4) dissociation constant Ka
+PHUP_DISSCONSTANT = 10**0.7 #Strong base (KOH) dissociation constant Kb
+PUMP_FLOW_CONSTANT = 1.35 #mL/s
 
 #Variable declarations and such
 os.system('modprobe w1-gpio')    #1-W setup
 os.system('modprobe w1-therm')    #^
 wirefile = None        #Saves the 1-W file location so we only have to search for it once
+arduinoData = {}    #Arduino parsed JSON data
+arduino = serial.Serial('/dev/ttyACM0', 9600)   #arduino serial port
 
 #Oneliner functions
 timems = lambda : int(time.time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
-floatSensorInvert = lambda sensor : 1-getSensorValue(sensor)
 formattedTime = lambda : time.strftime('%H:%M:%S', time.gmtime(12345))
 
 #Function Definitions
@@ -46,25 +51,10 @@ def formatState(state):
     else:
         return str(state)
     
-def pHPumpControl(pump, constant, actuator, phvar):
-    thread.start_new_thread(pHPumpControl, (pump, constant, actuator, phvar))
+def pHPumpControl(actuator, phvar, pump):
+    thread.start_new_thread(pHPumpcontrol, (pump, amount))
 
-def _pHPumpControl(pump, constant, actuator, phvar):
-	actuator.busy = True
-	#-- BODY --#
-	#Get amount to pump
-	mL = getPHAdjustAmount(phvar.current, (phvar.min+phvar.max)/2, constant)
-	#Get time to hold pump open
-	holdTime = getPumpHoldTime(mL)
-	pump.on()
-	delay(holdTime)
-	pump.off()
-	pump.busy = False
- 
-def nutrientPumpControl(actuator, pump):
-        thread.start_new_thread(nutrientPumpControl, (pump, amount))
-
-def _nutrientPumpControl(actuator, pump, constant):
+def _pHPumpControl(actuator, phvar, pump, constant):
 	pump.busy = True
 	#-- BODY --#
 	#Get amount to pump
@@ -83,23 +73,19 @@ def getPHAdjustAmount(current, target, constant):
     currentC = currentH**2/constant
     targetC = targetH**2/constant
     deltaC = targetC + deltaH - currentC
+    
 
 def setup1Wire(directory, prefix):
-    debug("Setting up 1-Wire device with prefix '"+str(prefix)+"'...")
     try:
         os.chdir(directory) #try open dir
     except:
-        debug("Could not open directory '"+directory+"'")
         return
     else:
         for f in os.listdir(directory):  #find file that matches prefix
             if(f.startswith(prefix)):
-                debug("Found '"+f+"'!")
-                global wirefile
                 wirefile = open(f+'/w1_slave', 'r') #open slave data file
 
 def read1Wire(marker):
-    debug("Reading 1-Wire device...")
     if(wirefile != None):
         lines = wirefile.readlines()
                 #for line in lines:
@@ -107,19 +93,10 @@ def read1Wire(marker):
                 #while lines[0].strip[-3:] != 'YES': #wait for YES signal
                     #time.sleep(0.2)
                     # = x.readlines()
-        try:
-            temp = lines[1].find(marker)  #find temp data
+        temp = lines[1].find(marker)  #find temp data
                 #print(temp)
-            if(temp != -1):
-                l = lines[1].strip()
-                debug("Raw line: '"+l+"'")
-                l = int(l[temp+2:])
-                debug("Raw data: '"+str(l)+"'")
-                return l/1000.0  #return C
-        except:
-            debug("No marker '"+marker+"' found in file!")
-            return None
-    debug("No 1-Wire bus file initialized!")
+        if(temp != -1):
+            return int(lines[1].strip()[temp+2:])/1000.0  #return C
     return None
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
@@ -139,10 +116,8 @@ class Sensor:
             debug("Reading sensor '"+self.name+"'...")
             temp = self.func(*self.args)
             self.lastread = timems()
-            debug("Done reading sensor '"+self.name+"'. State: "+formatState(str(temp)))
+            debug("Done reading sensor '"+self.name+"'! State: "+str(self.state))
             return temp
-        else:
-            debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.")
         
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
@@ -159,53 +134,35 @@ class Actuator:
         #Arg settings
         self.passEnvVar = passEnvVar
         self.passActuator = passActuator
-        self.args0 = args0
-        self.args1 = args1
-        self.args2 = args2
-        #Do default state
-        self._actuate(1)
-        self.current = 1
         #Will always be false unless set elsewhere
         self.busy = False
        #handle function rerouting based on envvar state
     def actuate(self, envvar):
-        if(self.busy != True):
-            index = 1
-            if(envvar.current >= envvar.max):
-                debug("'"+envvar.name+"' is too high! "+str(envvar.current)+" >= "+str(envvar.max))
+        if(busy != True):
+            index = -1
+            msg = ""
+
+            temp = None
+            if(envvar.current >= max):
+                temp = funcDown
                 index = 2
-            elif(envvar.current <= envvar.min):
-                debug("'"+envvar.name+"' is too low! "+str(envvar.current)+" <= "+str(envvar.min))
+                msg = "Actuated actuator '"+self.name+"' down, passing "
+            elif(envvar.current <= min):
+                temp = funcUp
                 index = 0
+                msg = "Actuated actuator '"+self.name+"' up, passing "
             else:
-                debug("'"+envvar.name+"' is in range. "+str(envvar.min)+" < "+str(envvar.current)+" < "+str(envvar.max))
+                temp = funcDefault
                 index = 1
-            #handle arguments to pass based on actuator settings (defaults to no args)
-            if(index != self.current):
-                self._actuate(index)
-        else:
-            debug("'"+self.name+"' is busy!")
-    def _actuate(self, index):
-        msg = ""
-        if(index == 0):
-            temp = self.funcUp
-            msg += "Actuated actuator '"+self.name+"' up, passing "
-        elif(index == 1):
-            temp = self.funcDefault
-            msg += "Actuated actuator '"+self.name+"' to default, passing "
-        else:
-            temp = self.funcDown
-            msg += "Actuated actuator '"+self.name+"' down, passing "
+                msg = "Actuated actuator '"+self.name+"' back to default state, passing "
         #handle arguments to pass based on actuator settings (defaults to no args)
-        args = self.args1 if index is 1 else self.args2 if index is 2 else self.args0
-        if(self.passActuator[index]):
+        args = args1 if index is 1 else args2 if index is 2 else args0
+        if(passActuator[index]):
             args.append(self)
-        if(self.passEnvVar[index]):
+        if(passEnvVar[index]):
             args.append(envvar)
-        msg+=str(len(args))+" arguments!"
-        debug(msg)
+        #msg+=str(args.len())+" arguments!"
         temp(*args)
-        self.current = index
 
 #Manages the state of environment variables as reported by the sensors relative to their minimum and maximum homeostatic optima
 class EnvironmentVariable:
@@ -216,10 +173,6 @@ class EnvironmentVariable:
         self.actuator = actuator
         self.current = sensor.read()
         self.max = max
-    def update(self):
-        temp = self.sensor.read()
-        if(temp != None):
-            self.current = temp
 
 #Input Pins
 waterlevel = Button(17)
@@ -238,32 +191,27 @@ pumpNutrients = DigitalOutputDevice(24)
 actuators=[ Actuator("Water In Pump", pumpWaterIn.on, pumpWaterIn.off, None),
             Actuator("Air Cooler", None, airCooler.off, airCooler.on),
             Actuator("Water Cooler", None, waterCooler.off, waterCooler.on),
-            Actuator("pH Pumps", pHPumpControl, lambda: (pumpPHUp.off(), pumpPHDown.off()), pHPumpControl, 
-                     passActuator = (True, False, True), passEnvVar = (True, False, True), 
-                     args0 = [pumpPHUp, PHUP_DISSCONSTANT], args2 = [pumpPHDown, PHDOWN_DISSCONSTANT]),
-            Actuator("Nutrient Pumps", nutrientPumpControl, lambda: (pumpNutrientA.off(), pumpNutrientB.off(), pumpNutrientCalMag.off()), nutrientPumpControl,
-                     passActuator = (True, False, True), passEnvVar = (True, False, True), 
-                     args0 = [pumpPHUp, PHUP_DISSCONSTANT], args2 = [pumpPHDown, PHDOWN_DISSCONSTANT])
-]
+            Actuator("pH Pumps", pHPumpControl, lambda: (pumpPHUp.off(), pumpPHDown.off()), pHPumpControl, passActuator = (True, False, True), passEnvVar = (True, False, True), args0 = [pumpPHUp, PHUP_DISSCONSTANT], args2 = [pumpPHDown, PHDOWN_DISSCONSTANT]),
+            ]
 
 #Name, Environment variable, Delay in ms, Read function and args
 sensors = [ 
-    Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0),
+    Sensor("DHT-Humidity", 4000, None, separateReadDHT, Adafruit_DHT.DHT22, 13, 0),
     Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1),
-    Sensor("Float Sensor", 500, floatSensorInvert, waterlevel),
+    Sensor("Float Sensor", 500, getSensorValue, waterlevel),
     Sensor("Water Thermometer", 1000, read1Wire, 't='),
     Sensor("Arduino-pH Probe", 1000, readArduinoSensor, 'pH'),
     Sensor("Arduino-Conductivity Probe", 1000, readArduinoSensor, 'Conductivity')
 ]
 
-#Name, Homeostasis minimum and maximum values, sensor, actuator
+#Name, Homeostasis minimum and maximum values
 environmentVariables = [ 
-    EnvironmentVariable("Air Humidity", 80, 100, sensors[0], None),
-    EnvironmentVariable("Air Temperature", 12, 15, sensors[1], actuators[1]),
-    EnvironmentVariable("Water Level", 0, 1, sensors[2], actuators[0]),
-    EnvironmentVariable("Water Temperature", 10, 12, sensors[3], actuators[2]),
-    EnvironmentVariable("pH", 6.1, 6.5, sensors[4], actuators[3]),
-    EnvironmentVariable("Conductivity", 1300, 1600, sensors[4], actuators[4])
+    EnvironmentVariable("Air Humidity", 60, 80),
+    EnvironmentVariable("Air Temperature", 12, 15),
+    EnvironmentVariable("Water Level", 0, 1),
+    EnvironmentVariable("Water Temperature", 10, 12),
+    EnvironmentVariable("pH", 6.1, 6.5),
+    EnvironmentVariable("Conductivity", 1300, 1600)
 ]
             
 #Main
@@ -272,9 +220,9 @@ print("Setting up...")
 setup1Wire('/sys/bus/w1/devices', '28-')
 
 while True:
+    updateArduino()
     for envvar in environmentVariables:
-        envvar.update()    #Sense
-        if(envvar.actuator != None):
-            envvar.actuator.actuate(envvar) #plan, act\
-        print(envvar.name+": "+formatState(envvar.current))
-        sleep(1)
+        envvar.sensor.read()    #Sense
+        #envvar.actuator.actuate(envvar) #plan, act\
+        print(envvar.current)
+        delay(0.3)
