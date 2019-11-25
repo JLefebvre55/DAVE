@@ -1,2 +1,2 @@
-__init__.py:
-__all__ = ["bar"]
+#Lists all files for "import *"
+__all__ = ["DAVE_Lib"]
