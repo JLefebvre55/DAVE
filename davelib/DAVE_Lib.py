@@ -14,8 +14,9 @@ import serial
 import json
 
 #Constants
-__doDebug__ = False    #Print everything?
+__debugLevel__ = 1    #0-Errors, 1-Read values and Actions, 2-Device setup and read start/ends, 3-All other
 __delay__ = 0.1     #Time in s between serial sensor reads
+__setup__ = False
 
 #Variable declarations and such
 os.system('modprobe w1-gpio')    #1-W setup
@@ -29,13 +30,12 @@ timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
-floatSensorInvert = lambda sensor : 1-getSensorValue(sensor)
-formattedTime = lambda : datetime.datetime.now().time().split('.')[0]
+formattedaTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
 
 #Function Definitions
-def debug(status):    #Replaces print
-    if(__doDebug__):
-        print("[DEBUG @"+formattedTime()+"] : "+status)
+def debug(status, level):    #Replaces print
+    if(level <= __debugLevel__):
+        print("[DEBUG !"+str(level)+" @"+formattedTime()+"] : "+status)
 
 def formatState(state):
     if(type(state) is float):
@@ -44,20 +44,20 @@ def formatState(state):
         return str(state)
 
 def find1Wire(directory, prefix):
-    debug("Setting up 1-Wire device with prefix '"+str(prefix)+"'...")
+    debug("Setting up 1-Wire device with prefix '"+str(prefix)+"'...", 2)
     try:
         os.chdir(directory) #try open dir
     except:
-        debug("Could not open directory '"+directory+"'")
+        debug("Could not open directory '"+directory+"'", 0)
         return
     else:
         for f in os.listdir(directory):  #find file that matches prefix
             if(f.startswith(prefix)):
-                debug("Found '"+f+"'!")
+                debug("Found '"+f+"'!", 3)
                 return f+'/w1_slave' #save path
 
 def read1Wire(wirefile, marker):
-    debug("Reading 1-Wire device...")
+    debug("Reading 1-Wire device...", 2)
     if(wirefile != None):
         file = open(wirefile, 'r')
         lines = file.readlines()
@@ -71,15 +71,15 @@ def read1Wire(wirefile, marker):
                 #print(temp)
             if(temp != -1):
                 l = lines[1].strip()
-                debug("Raw line: '"+l+"'")
+                debug("Raw line: '"+l+"'", 2)
                 l = int(l[temp+2:])
-                debug("Raw data: '"+str(l)+"'")
+                debug("Raw data: '"+str(l)+"'", 2)
                 file.close()
                 return l/1000.0  #return C
         except:
-            debug("No marker '"+marker+"' found in file!")
+            debug("No marker '"+marker+"' found in file!", 0)
             return None
-    debug("No 1-Wire bus file initialized!")
+    debug("No 1-Wire bus file initialized!", 0)
     return None
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
@@ -96,13 +96,13 @@ class Sensor:
         
     def read(self):
         if(timems() - self.lastread >= self.delay):
-            debug("Reading sensor '"+self.name+"'...")
+            debug("Reading sensor '"+self.name+"'...", 2)
             temp = self.func(*self.args)
             self.lastread = timems()
-            debug("Done reading sensor '"+self.name+"'. State: "+formatState(str(temp)))
+            debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
         else:
-            debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.")
+            debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.", 3)
         
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
@@ -124,38 +124,41 @@ class Actuator:
         self.args2 = args2
         #Do default state
         self._actuate(1)
-        self.current = 1
+        self.trajectory = 1
         #Will always be false unless set elsewhere
         self.busy = False
        #handle function rerouting based on envvar state
     def actuate(self, envvar):
         if(self.busy != True):
-            index = 1
+            index = self.trajectory
             if(envvar.current >= envvar.max):
-                debug("'"+envvar.name+"' is too high! "+str(envvar.current)+" >= "+str(envvar.max))
+                debug("'"+envvar.name+"' is too high! "+str(envvar.current)+" >= "+str(envvar.max), 2)
                 index = 2
             elif(envvar.current <= envvar.min):
-                debug("'"+envvar.name+"' is too low! "+str(envvar.current)+" <= "+str(envvar.min))
+                debug("'"+envvar.name+"' is too low! "+str(envvar.current)+" <= "+str(envvar.min), 2)
                 index = 0
-            else:
-                debug("'"+envvar.name+"' is in range. "+str(envvar.min)+" < "+str(envvar.current)+" < "+str(envvar.max))
+            elif((self.trajectory == 2 and envvar.current <= envvar.optimal) or (self.trajectory == 0 and envvar.current >= envvar.optimal)):
+                print("'"+envvar.name+"' has reached optimal. "+str(envvar.current)+" ~ "+str(envvar.optimal)+". T:"+str(self.trajectory))
                 index = 1
             #handle arguments to pass based on actuator settings (defaults to no args)
-            if(index != self.current):
+            if(index != self.trajectory):
+                self.trajectory = index
                 self._actuate(index)
+            else:
+                debug(self.name+" already has trajectory "+str(self.trajectory)+"!", 3)
         else:
-            debug("'"+self.name+"' is busy!")
+            debug("'"+self.name+"' is busy!", 3)
     def _actuate(self, index):
         msg = ""
         if(index == 0):
             temp = self.funcUp
             msg += "Actuated actuator '"+self.name+"' up, passing "
-        elif(index == 1):
-            temp = self.funcDefault
-            msg += "Actuated actuator '"+self.name+"' to default, passing "
-        else:
+        elif(index == 2):
             temp = self.funcDown
             msg += "Actuated actuator '"+self.name+"' down, passing "
+        else:
+            temp = self.funcDefault
+            msg += "Actuated actuator '"+self.name+"' to default, passing "
         #handle arguments to pass based on actuator settings (defaults to no args)
         args = self.args1 if index is 1 else self.args2 if index is 2 else self.args0
         if(self.passActuator[index]):
@@ -163,35 +166,70 @@ class Actuator:
         if(self.passEnvVar[index]):
             args.append(envvar)
         msg+=str(len(args))+" arguments!"
-        debug(msg)
+        debug(msg, 1)
         temp(*args)
-        self.current = index
 
 #Manages the state of environment variables as reported by the sensors relative to their minimum and maximum homeostatic optima
 class EnvironmentVariable:
-    def __init__(self, name, min, max, sensor, actuator):
+    def __init__(self, name, min, max, optimal, sensor, actuator):
         self.name = name
         self.min = min
         self.sensor = sensor
         self.actuator = actuator
         self.current = sensor.read()
         self.max = max
+        self.optimal = optimal
     def update(self):
         temp = self.sensor.read()
         if(temp != None):
             self.current = temp
 
-def DAVE(EVs = [], debug = False, delay = 0.1, **kwargs):
-    global __doDebug__, __EVs__, __delay__
-    __doDebug__ = debug
+def setup(EVs = [], debug = 0, delay = 0.1, **kwargs):
+    print("Performing first time DAVE setup...")
+    global __debugLevel__, __EVs__, __delay__
+    __debugLevel__ = debug
     __delay__ = delay
     __EVs__ = EVs
     
 def run():
+    if(__setup__):
+        ("Welcome to the DAVE Homeostasis Engine!") 
+        while True:
+            for ev in __EVs__:
+                ev.update()    #Sense
+                if(ev.actuator != None):
+                    ev.actuator.actuate(ev) #Plan, Act
+                print(ev.name+": "+formatState(ev.current))
+                sleep(__delay__)
+    else:
+        print("[ERR]: Setup has not yet been performed!")
+            
+def interface():
+    exit = False
+    print("Welcome to the DAVE manual interface!\n")
     while True:
-        for ev in __EVs__:
-            ev.update()    #Sense
-            if(ev.actuator != None):
-                ev.actuator.actuate(ev) #Plan, Act
-            print(ev.name+": "+formatState(ev.current))
-            sleep(__delay__)
+        print("What to do?\n1: Read variable\n2: Actuate\n3: Quit")
+        x = int(input())
+        if(x == 3):
+            break
+        print("Choose an environment variable:")
+        i = 1
+        for envvar in environmentVariables:
+            print(str(i)+": "+envvar.name)
+            i+=1
+        i = int(input())
+        envvar = environmentVariables[i-1]
+        if(x==1):
+            envvar.update()
+            print("Attached sensor: "+envvar.sensor.name)
+            print("State: "+str(envvar.current))
+        elif (x == 2):
+            if(envvar.actuator != None):
+                print("Actuate as if variable was:\n1. Too low\n2. In range\n3. Too high")
+                c = int(input())
+                envvar.actuator._actuate(c-1)
+            else:
+                print("No attached actuator!")
+    print("Goodbye!")
+    sleep(1)
+        
