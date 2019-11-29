@@ -30,7 +30,7 @@ timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
-formattedaTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
+formattedTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
 
 #Function Definitions
 def debug(status, level):    #Replaces print
@@ -186,10 +186,11 @@ class EnvironmentVariable:
 
 def setup(EVs = [], debug = 0, delay = 0.1, **kwargs):
     print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __delay__
+    global __debugLevel__, __EVs__, __delay__, __setup__
     __debugLevel__ = debug
     __delay__ = delay
     __EVs__ = EVs
+    __setup__ = True
     
 def run():
     if(__setup__):
@@ -205,31 +206,34 @@ def run():
         print("[ERR]: Setup has not yet been performed!")
             
 def interface():
-    exit = False
-    print("Welcome to the DAVE manual interface!\n")
-    while True:
-        print("What to do?\n1: Read variable\n2: Actuate\n3: Quit")
-        x = int(input())
-        if(x == 3):
-            break
-        print("Choose an environment variable:")
-        i = 1
-        for envvar in environmentVariables:
-            print(str(i)+": "+envvar.name)
-            i+=1
-        i = int(input())
-        envvar = environmentVariables[i-1]
-        if(x==1):
-            envvar.update()
-            print("Attached sensor: "+envvar.sensor.name)
-            print("State: "+str(envvar.current))
-        elif (x == 2):
-            if(envvar.actuator != None):
-                print("Actuate as if variable was:\n1. Too low\n2. In range\n3. Too high")
-                c = int(input())
-                envvar.actuator._actuate(c-1)
-            else:
-                print("No attached actuator!")
-    print("Goodbye!")
-    sleep(1)
+    if(__setup__):
+        exit = False
+        print("Welcome to the DAVE manual interface!\n")
+        while True:
+            print("What to do?\n1: Read variable\n2: Actuate\n3: Quit")
+            x = int(input())
+            if(x == 3):
+                break
+            print("Choose an environment variable:")
+            i = 1
+            for envvar in __EVs__:
+                print(str(i)+": "+envvar.name)
+                i+=1
+            i = int(input())
+            envvar = __EVs__[i-1]
+            if(x==1):
+                envvar.update()
+                print("Attached sensor: "+envvar.sensor.name)
+                print("State: "+str(envvar.current))
+            elif (x == 2):
+                if(envvar.actuator != None):
+                    print("Actuate as if variable was:\n1. Too low\n2. In range\n3. Too high")
+                    c = int(input())
+                    envvar.actuator._actuate(c-1)
+                else:
+                    print("No attached actuator!")
+        print("Goodbye!")
+        sleep(1)
+    else:
+        print("[ERR]: Setup has not yet been performed!")
         
