@@ -184,9 +184,10 @@ class EnvironmentVariable:
         self.min = min
         self.sensor = sensor
         self.actuator = actuator
-        self.current = sensor.read()
+        self.current = optimal
         self.max = max
         self.optimal = optimal
+        self.update()
     def update(self):
         if(self.sensor != None):
             temp = self.sensor.read()
