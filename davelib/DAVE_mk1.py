@@ -9,6 +9,7 @@ waterlevel = Button(17)
 pumpWaterIn = DigitalOutputDevice(6)
 airCooler = DigitalOutputDevice(22)
 waterCooler = DigitalOutputDevice(27)
+growLights = DigitalOutputDevice(25)
 
 wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 
@@ -25,5 +26,8 @@ __standardEVs__ = [
                         Actuator("Water In Pump", (lambda a : (pumpWaterIn.on(), holdActuator(a, 60))), pumpWaterIn.off, None, passActuator = (True, False, False))),
     EnvironmentVariable("Water Temperature (C)", 10, 14, 13.2,
                         Sensor("Water Thermometer", 1000, read1Wire, wirefilesrc, 't='), 
-                        Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on))
+                        Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)),
+    EnvironmentVariable("Light", 0, 1, 0,
+                        None,
+                        Actuator("Grow Lights", growLights.on, growLights.off, None))
 ]

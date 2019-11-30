@@ -188,9 +188,12 @@ class EnvironmentVariable:
         self.max = max
         self.optimal = optimal
     def update(self):
-        temp = self.sensor.read()
-        if(temp != None):
-            self.current = temp
+        if(self.sensor != None):
+            temp = self.sensor.read()
+            if(temp != None):
+                self.current = temp
+            else:
+                debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
 
 def setup(EVs = [], debug = 0, delay = 0.1, **kwargs):
     print("Performing first time DAVE setup...")
@@ -230,12 +233,15 @@ def interface():
             i = int(input())
             envvar = __EVs__[i-1]
             if(x==1):
-                envvar.update()
-                print("Attached sensor: "+envvar.sensor.name)
-                print("State: "+str(envvar.current))
+                if(envvar.sensor != None):
+                    envvar.update()
+                    print("Attached sensor: "+envvar.sensor.name)
+                    print("State: "+str(envvar.current))
+                else:
+                    print("No attached sensor!")
             elif (x == 2):
                 if(envvar.actuator != None):
-                    print("Actuate as if variable was:\n1. Too low\n2. In range\n3. Too high")
+                    print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
                     c = int(input())
                     envvar.actuator._actuate(c-1)
                 else:
