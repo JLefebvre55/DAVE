@@ -80,7 +80,15 @@ def read1Wire(wirefile, marker):
             debug("No marker '"+marker+"' found in file!", 0)
             return None
     debug("No 1-Wire bus file initialized!", 0)
-    return None
+    return None    
+
+def holdActuator(actuator, time):
+    thread.start_new_thread(_holdActuator, (actuator, time))
+    
+def _holdActuator(actuator, time):
+    actuator.busy = True
+    sleep(time)
+    actuator.busy = False
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
