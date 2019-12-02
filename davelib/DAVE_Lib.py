@@ -168,6 +168,8 @@ class Actuator:
             msg += "Actuated actuator '"+self.name+"' to default, passing "
         #handle arguments to pass based on actuator settings (defaults to no args)
         
+        args = []
+        
         for a in self.args[index]:
             args.append(a)
         
