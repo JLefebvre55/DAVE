@@ -127,7 +127,7 @@ class Actuator:
         #Arg settings
         self.passEnvVar = passEnvVar
         self.passActuator = passActuator
-        self.args = (*args0, *args1, *args2)
+        self.args = (args0, args1, args2)
         #Do default state
         self._actuate(1)
         self.trajectory = 1
