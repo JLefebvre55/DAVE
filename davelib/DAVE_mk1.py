@@ -27,7 +27,7 @@ __standardEVs__ = [
     EnvironmentVariable("Water Temperature (C)", 10, 14, 13.2,
                         Sensor("Water Thermometer", 1000, read1Wire, wirefilesrc, 't='), 
                         Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)),
-    EnvironmentVariable("Light", 0, 1, 0,
+    EnvironmentVariable("Light", 0, 1, None,
                         None,
                         Actuator("Grow Lights", growLights.on, growLights.off, None))
 ]

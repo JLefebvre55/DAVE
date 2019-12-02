@@ -137,7 +137,9 @@ class Actuator:
         self.busy = False
        #handle function rerouting based on envvar state
     def actuate(self, envvar):
-        if(self.busy != True):
+        if(self.busy is True):
+            debug("'"+self.name+"' is busy!", 3)
+        elif(envvar.optimal != None):
             index = self.trajectory
             if(envvar.current >= envvar.max):
                 debug("'"+envvar.name+"' is too high! "+str(envvar.current)+" >= "+str(envvar.max), 2)
@@ -154,24 +156,29 @@ class Actuator:
                 self._actuate(index)
             else:
                 debug(self.name+" already has trajectory "+str(self.trajectory)+"!", 3)
-        else:
-            debug("'"+self.name+"' is busy!", 3)
+            
     def _actuate(self, index):
         msg = ""
+        args = []
         if(index == 0):
             temp = self.funcUp
             msg += "Actuated actuator '"+self.name+"' up, passing "
+            args = self.args0
         elif(index == 2):
             temp = self.funcDown
             msg += "Actuated actuator '"+self.name+"' down, passing "
+            args = self.args2
         else:
+            args = self.args1
             temp = self.funcDefault
             msg += "Actuated actuator '"+self.name+"' to default, passing "
         #handle arguments to pass based on actuator settings (defaults to no args)
-        args = self.args1 if index is 1 else self.args2 if index is 2 else self.args0
+        
         if(self.passActuator[index]):
+            print("Appended actuator")
             args.append(self)
         if(self.passEnvVar[index]):
+            print("Appended envvar")
             args.append(envvar)
         msg+=str(len(args))+" arguments!"
         debug(msg, 1)
@@ -242,9 +249,12 @@ def interface():
                     print("No attached sensor!")
             elif (x == 2):
                 if(envvar.actuator != None):
-                    print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
-                    c = int(input())
-                    envvar.actuator._actuate(c-1)
+                    if(envvar.actuator.busy):
+                        print("Actuator is busy.")
+                    else:
+                        print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
+                        c = int(input())
+                        envvar.actuator._actuate(c-1)
                 else:
                     print("No attached actuator!")
         print("Goodbye!")
