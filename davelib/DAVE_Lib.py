@@ -127,9 +127,7 @@ class Actuator:
         #Arg settings
         self.passEnvVar = passEnvVar
         self.passActuator = passActuator
-        self.args0 = args0
-        self.args1 = args1
-        self.args2 = args2
+        self.args = (*args0, *args1, *args2)
         #Do default state
         self._actuate(1)
         self.trajectory = 1
@@ -159,30 +157,29 @@ class Actuator:
             
     def _actuate(self, index):
         msg = ""
-        args = []
         if(index == 0):
-            temp = self.funcUp
+            f = self.funcUp
             msg += "Actuated actuator '"+self.name+"' up, passing "
-            args = self.args0
         elif(index == 2):
-            temp = self.funcDown
+            f = self.funcDown
             msg += "Actuated actuator '"+self.name+"' down, passing "
-            args = self.args2
         else:
-            args = self.args1
-            temp = self.funcDefault
+            f = self.funcDefault
             msg += "Actuated actuator '"+self.name+"' to default, passing "
         #handle arguments to pass based on actuator settings (defaults to no args)
         
+        for a in self.args[index]:
+            args.append(a)
+        
         if(self.passActuator[index]):
-            print("Appended actuator")
+            debug("Appended actuator to actuation args", 3)
             args.append(self)
         if(self.passEnvVar[index]):
-            print("Appended envvar")
+            debug("Appended envvar to actuation args", 3)
             args.append(envvar)
         msg+=str(len(args))+" arguments!"
         debug(msg, 1)
-        temp(*args)
+        f(*args)
 
 #Manages the state of environment variables as reported by the sensors relative to their minimum and maximum homeostatic optima
 class EnvironmentVariable:
