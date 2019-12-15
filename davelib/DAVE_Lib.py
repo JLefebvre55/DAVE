@@ -12,11 +12,14 @@ import os
 import thread
 import serial
 import json
+from picamera import PiCamera
+import mysql.connector as mariadb
 
 #Constants
 __debugLevel__ = 1    #0-Errors, 1-Read values and Actions, 2-Device setup and read start/ends, 3-All other
 __delay__ = 0.1     #Time in s between serial sensor reads
 __setup__ = False
+__database__ = None
 
 #Variable declarations and such
 os.system('modprobe w1-gpio')    #1-W setup
@@ -202,12 +205,14 @@ class EnvironmentVariable:
             else:
                 debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
 
-def setup(EVs = [], debug = 0, delay = 0.1, **kwargs):
+def setup(EVs = [], dbInfo = None, debug = 0, delay = 0.1, **kwargs):
     print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __delay__, __setup__
+    global __debugLevel__, __EVs__, __delay__, __setup__, __database__
     __debugLevel__ = debug
     __delay__ = delay
     __EVs__ = EVs
+    if(dbInfo != None):
+        __database__ = mariadb.connect(user=dbInfo.user, password=dbInfo.pass, database=dbInfo.name)
     __setup__ = True
     
 def run():
@@ -218,7 +223,8 @@ def run():
                 ev.update()    #Sense
                 if(ev.actuator != None):
                     ev.actuator.actuate(ev) #Plan, Act
-                print(ev.name+": "+formatState(ev.current))
+                if(ev.sensor != None):
+                    print(ev.name+": "+formatState(ev.current))
                 sleep(__delay__)
     else:
         print("[ERR]: Setup has not yet been performed!")
@@ -226,12 +232,18 @@ def run():
 def interface():
     if(__setup__):
         exit = False
+        dbcursor = __database__.cursor()
         print("Welcome to the DAVE manual interface!\n")
         while True:
-            print("What to do?\n1: Read variable\n2: Actuate\n3: Quit")
+            print("What to do?\n1: Read variable\n2: Actuate\n3: Read from MySQL database\n4: Write to MySQL database\n5: Quit")
             x = int(input())
-            if(x == 3):
+            if(x == 5):
                 break
+            if(x==4):
+                dbcursor.execute("")
+            if(x == 3):
+                dbcursor.execute("SELECT * FROM sensordata")
+                print(dbcursor)
             print("Choose an environment variable:")
             i = 1
             for envvar in __EVs__:
