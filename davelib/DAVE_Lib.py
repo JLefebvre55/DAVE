@@ -212,7 +212,7 @@ def setup(EVs = [], dbInfo = None, debug = 0, delay = 0.1, **kwargs):
     __delay__ = delay
     __EVs__ = EVs
     if(dbInfo != None):
-        __database__ = mariadb.connect(user=dbInfo.user, password=dbInfo.password, database=dbInfo.name)
+        __database__ = mariadb.connect(user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
     __setup__ = True
     
 def run():
