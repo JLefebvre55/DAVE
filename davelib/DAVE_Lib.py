@@ -212,7 +212,10 @@ def setup(EVs = [], dbInfo = None, debug = 0, delay = 0.1, **kwargs):
     __delay__ = delay
     __EVs__ = EVs
     if(dbInfo != None):
-        __database__ = mariadb.connect(user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
+        try:
+            __database__ = mariadb.connect(host = dbInfo["host"], user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
+        except mariadb.Error as error:
+            print("[ERR]: {}".format(error))
     __setup__ = True
     
 def run():
@@ -239,35 +242,40 @@ def interface():
             x = int(input())
             if(x == 5):
                 break
-            if(x==4):
-                dbcursor.execute("")
-            if(x == 3):
-                dbcursor.execute("SELECT * FROM sensordata")
-                print(dbcursor)
-            print("Choose an environment variable:")
-            i = 1
-            for envvar in __EVs__:
-                print(str(i)+": "+envvar.name)
-                i+=1
-            i = int(input())
-            envvar = __EVs__[i-1]
-            if(x==1):
-                if(envvar.sensor != None):
-                    envvar.update()
-                    print("Attached sensor: "+envvar.sensor.name)
-                    print("State: "+str(envvar.current))
-                else:
-                    print("No attached sensor!")
-            elif (x == 2):
-                if(envvar.actuator != None):
-                    if(envvar.actuator.busy):
-                        print("Actuator is busy.")
+            elif(x==4):
+                pass
+            elif(x == 3):
+                try:
+                    dbcursor.execute("SELECT * FROM sensordata")
+                    result = dbcursor.fetchall()[-1]
+                    print(result)
+                except mariadb.Error as error:
+                    print("[ERR]: {}".format(error))
+            else:
+                print("Choose an environment variable:")
+                i = 1
+                for envvar in __EVs__:
+                    print(str(i)+": "+envvar.name)
+                    i+=1
+                i = int(input())
+                envvar = __EVs__[i-1]
+                if(x==1):
+                    if(envvar.sensor != None):
+                        envvar.update()
+                        print("Attached sensor: "+envvar.sensor.name)
+                        print("State: "+str(envvar.current))
                     else:
-                        print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
-                        c = int(input())
-                        envvar.actuator._actuate(c-1)
-                else:
-                    print("No attached actuator!")
+                        print("No attached sensor!")
+                elif (x == 2):
+                    if(envvar.actuator != None):
+                        if(envvar.actuator.busy):
+                            print("Actuator is busy.")
+                        else:
+                            print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
+                            c = int(input())
+                            envvar.actuator._actuate(c-1)
+                    else:
+                        print("No attached actuator!")
         print("Goodbye!")
         sleep(1)
     else:
