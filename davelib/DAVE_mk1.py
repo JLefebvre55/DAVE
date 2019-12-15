@@ -15,7 +15,7 @@ wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 
 __dbInfo__ = {"name" : "davedb", 
               "user" : "dave", 
-              "pass" : "password"}
+              "password" : "password"}
 
 __hasCamera__ = True;
 
