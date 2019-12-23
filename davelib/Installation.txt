@@ -20,9 +20,13 @@ CREATE TABLE sensordata(
     airhum DECIMAL(4,2) NOT NULL,
     airtemp DECIMAL(4,2) NOT NULL,
     waterlevel_ishigh boolean NOT NULL,
+    watertemp DECIMAL(4,2) NOT NULL,
     ph DECIMAL(4,2) NOT NULL,
     electric_conductivity DECIMAL(6,2) NOT NULL
 );
+
+##ONE LINER##
+CREATE TABLE sensordata(id INT PRIMARY KEY AUTO_INCREMENT,timestamp TIMESTAMP NOT NULL,airhum DECIMAL(4,2) NOT NULL,airtemp DECIMAL(4,2) NOT NULL,waterlevel_ishigh boolean NOT NULL,ph DECIMAL(4,2) NOT NULL,electric_conductivity DECIMAL(6,2) NOT NULL);
 
 CREATE TABLE actuatordata(
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -35,6 +39,7 @@ CREATE TABLE actuatordata(
 
 ##PYTHON SETUP##
 import mysql.connector as mariadb
+__database__ = mariadb.connect(host = dbInfo["host"], user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
 
 ##DB BACKUP##
 BACKUP DATABASE name

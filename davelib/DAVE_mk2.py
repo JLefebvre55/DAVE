@@ -13,12 +13,30 @@ growLights = DigitalOutputDevice(25)
 
 wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 
+#!!! DB COLUMN ORDER AND TYPE MUST MATCH ENVIRONMENT VARIABLE ORDER AND TYPE !!!
+#...excluding id and timestamp
+
 __dbInfo__ = {"name" : "davedb", 
               "user" : "dave", 
               "password" : "password",
-              "host" : "localhost"}
+              "host" : "localhost",
+              "columns": ["id INT PRIMARY KEY AUTO_INCREMENT", #index
+                          "timestamp TIMESTAMP NOT NULL", #timestamp
+                          "airhum DECIMAL(4,2) NOT NULL",
+                          "airtemp DECIMAL(4,2) NOT NULL",
+                          "waterlevel_ishigh boolean NOT NULL",
+                          "watertemp DECIMAL(4,2) NOT NULL",
+                          "ph DECIMAL(4,2) NOT NULL",
+                          "electric_conductivity DECIMAL(6,2) NOT NULL"]
+              }
 
-__hasCamera__ = True;
+#constants
+__hasCamera__ = True
+__hasArduino__ = True
+__arduinoSerialPort__ = '/dev/ttyACM0'
+__arduinoBAUD__ = 9600
+__delay__ = 1
+
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
 __standardEVs__ = [
@@ -34,6 +52,12 @@ __standardEVs__ = [
     EnvironmentVariable("Water Temperature (C)", 10, 14, 13.2,
                         Sensor("Water Thermometer", 1000, read1Wire, wirefilesrc, 't='), 
                         Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)),
+    EnvironmentVariable("pH", 6.0, 7.0, 6.5,
+                        Sensor("Arduino-pH Sensor", 400, separateArduino, "pH"),
+                        None),
+    EnvironmentVariable("Eletrical Conductivity", 1000, 1250, 1500,
+                        Sensor("Arduino-EC Sensor", 4000, separateArduino, "EC"),
+                        None),
     EnvironmentVariable("Light", 0, 1, None,
                         None,
                         Actuator("Grow Lights", growLights.on, growLights.off, None))

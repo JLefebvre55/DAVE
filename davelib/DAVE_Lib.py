@@ -19,7 +19,6 @@ import mysql.connector as mariadb
 __debugLevel__ = 1    #0-Errors, 1-Read values and Actions, 2-Device setup and read start/ends, 3-All other
 __delay__ = 0.1     #Time in s between serial sensor reads
 __setup__ = False
-__database__ = None
 
 #Variable declarations and such
 os.system('modprobe w1-gpio')    #1-W setup
@@ -27,17 +26,23 @@ os.system('modprobe w1-therm')    #^
 
 #EMPTY LISTS - To be filled at declaration
 __EVs__ = []
+__arduinoData__ = {}    #Arduino parsed JSON data
+__databaseManager__ = None
+__arduino__ = None  #arduino serial port
 
 #Oneliner functions
 timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
+separateArduino = lambda name : __arduinoData__[name]
 formattedTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
 
 #Function Definitions
 def debug(status, level):    #Replaces print
-    if(level <= __debugLevel__):
+    if(level == 0):
+        print("[!-ERROR-! @"+formattedTime()+"] : "+status)
+    elif(level <= __debugLevel__):
         print("[DEBUG !"+str(level)+" @"+formattedTime()+"] : "+status)
 
 def formatState(state):
@@ -92,6 +97,23 @@ def _holdActuator(actuator, time):
     actuator.busy = True
     sleep(time)
     actuator.busy = False
+
+def readArduinoSensor(name):
+    if name in arduinoData:
+        return arduinoData[name]
+    
+def readSerialJSON(serial):
+    try:
+        data = json.loads(serial.readLine)
+    except ValueError:
+        debug("Invalid/incomplete JSON from arduino!", 1)
+        return {}
+    else:
+        return data
+    
+def updateArduino():
+    data = readSerialJSON(__arduino__)
+    __arduinoData__[data.name] = data.state
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -205,17 +227,45 @@ class EnvironmentVariable:
             else:
                 debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
 
-def setup(EVs = [], dbInfo = None, debug = 0, delay = 0.1, **kwargs):
+class DBManager:
+    def __init__(self, settings):
+        self.settings = settings
+        try:
+            debug("Creating database manager...", 3)
+            self.database = mariadb.connect(host = settings.__dbInfo__["host"], user=settings.__dbInfo__["user"], password=settings.__dbInfo__["password"], database=settings.__dbInfo__["name"])
+        except mariadb.Error as error:
+            print("[ERR]: Error creating database manager; '{}'".format(error))
+        self.cursor = self.database.cursor()
+        self.setupTables()
+        debug("Database manager created!", 3)
+    def setupTables(self):
+        debug("Setting up DB tables. Columns:", 3)
+        command = "CREATE TABLE IF NOT EXISTS sensordata("
+        for col in self.settings.columns[:-1]
+            debug("- "+col, 3)
+            command+=col
+            command+=","
+        command+=self.settings.columns[-1]
+        debug(self.settings.columns[-1], 3)
+        command+=");"   #terminator
+        self.cursor.execute(command)
+        debug("DB tables set up successfully.")
+    def sendSensorData(self, evs):
+        command = "INSERT INTO sensordata VALUES ("+str(datetime.datetime.now()).split(".")[0]+","
+        for data in evs[:-1]:
+            command+= evs.current+","
+        command += evs[-1]+");"
+        self.cursor.execute(command)
+
+def setup(settings, debug = 0, delay = 0.1, **kwargs):
     print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __delay__, __setup__, __database__
+    global __debugLevel__, __EVs__, __delay__, __setup__, __databaseManager__, __arduino__
     __debugLevel__ = debug
     __delay__ = delay
-    __EVs__ = EVs
-    if(dbInfo != None):
-        try:
-            __database__ = mariadb.connect(host = dbInfo["host"], user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
-        except mariadb.Error as error:
-            print("[ERR]: {}".format(error))
+    __EVs__ = settings.__EVs__
+    if(settings.__hasArduino__):
+        __arduino__ = serial.Serial(settings.__arduinoSerialPort__, settings.__arduinoBAUD__)
+    __databaseManager__ = DBManager(settings.__dbInfo__)
     __setup__ = True
     
 def run():
@@ -235,22 +285,23 @@ def run():
 def interface():
     if(__setup__):
         exit = False
-        dbcursor = __database__.cursor()
         print("Welcome to the DAVE manual interface!\n")
         while True:
-            print("What to do?\n1: Read variable\n2: Actuate\n3: Read from MySQL database\n4: Write to MySQL database\n5: Quit")
+            print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Quit")
             x = int(input())
             if(x == 5):
                 break
             elif(x==4):
-                pass
+                __databaseManager__.sendSensorData(__EVs__)
             elif(x == 3):
                 try:
-                    dbcursor.execute("SELECT * FROM sensordata")
-                    result = dbcursor.fetchall()[-1]
+                    __databaseManager__.cursor.execute("SELECT * FROM sensordata")
+                    result = __databaseManager__.cursor.fetchall()[-1]
                     print(result)
                 except mariadb.Error as error:
                     print("[ERR]: {}".format(error))
+                except IndexError as error:
+                    print("[ERR]: Table has no rows!")
             else:
                 print("Choose an environment variable:")
                 i = 1
