@@ -241,12 +241,12 @@ class DBManager:
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 3)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
-        for col in self.settings.columns[:-1]
+        for col in self.settings["columns"][:-1]
             debug("- "+col, 3)
             command+=col
             command+=","
-        command+=self.settings.columns[-1]
-        debug(self.settings.columns[-1], 3)
+        command+=self.settings["columns"][-1]
+        debug(self.settings["columns"][-1], 3)
         command+=");"   #terminator
         self.cursor.execute(command)
         debug("DB tables set up successfully.")
