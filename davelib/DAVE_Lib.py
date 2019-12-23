@@ -241,7 +241,7 @@ class DBManager:
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 3)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
-        for col in self.settings["columns"][:-1]
+        for col in self.settings["columns"][:-1]:
             debug("- "+col, 3)
             command+=col
             command+=","
@@ -257,15 +257,16 @@ class DBManager:
         command += evs[-1]+");"
         self.cursor.execute(command)
 
-def setup(settings, debug = 0, delay = 0.1, **kwargs):
+def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, arduinoSerial **kwargs):
     print("Performing first time DAVE setup...")
     global __debugLevel__, __EVs__, __delay__, __setup__, __databaseManager__, __arduino__
     __debugLevel__ = debug
     __delay__ = delay
-    __EVs__ = settings.__EVs__
-    if(settings.__hasArduino__):
-        __arduino__ = serial.Serial(settings.__arduinoSerialPort__, settings.__arduinoBAUD__)
-    __databaseManager__ = DBManager(settings.__dbInfo__)
+    __EVs__ = evs
+    if(arduino != None):
+        __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
+    if(db!=None):
+        __databaseManager__ = DBManager(db)
     __setup__ = True
     
 def run():

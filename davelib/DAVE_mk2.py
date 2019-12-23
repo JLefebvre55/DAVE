@@ -30,16 +30,19 @@ __dbInfo__ = {"name" : "davedb",
                           "electric_conductivity DECIMAL(6,2) NOT NULL"]
               }
 
+__arduinoInfo__ = {
+    "serial" : '/dev/ttyACM0',
+    "baud" : 9600
+}
+
 #constants
 __hasCamera__ = True
 __hasArduino__ = True
-__arduinoSerialPort__ = '/dev/ttyACM0'
-__arduinoBAUD__ = 9600
 __delay__ = 1
 
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
-__standardEVs__ = [
+__EVs__ = [
     EnvironmentVariable("Air Humidity (%H)", 80, 100, 90,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
                         None),
