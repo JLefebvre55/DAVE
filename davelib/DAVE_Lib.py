@@ -115,7 +115,8 @@ def updateArduino():
     except ValueError:
         debug("Invalid/incomplete JSON from arduino!", 0)
     else:
-        __arduinoData__[data.name] = data.state
+        debug("Parsed JSON dict object: "+str(data), 3)
+        __arduinoData__[data["name"]] = data["state"]
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -251,7 +252,7 @@ class DBManager:
         debug("- "+self.settings["columns"][-1], 2)
         command+=");"   #terminator
         self.execute(command)
-        debug("DB tables set up successfully.")
+        debug("DB tables set up successfully.", 2)
     def sendSensorData(self, evs):
         debug("Collecting all current sensor data...", 3)
         command = "INSERT INTO sensordata VALUES ("+str(datetime.datetime.now()).split(".")[0]+","
@@ -305,7 +306,9 @@ def interface():
                 x = int(input())
             
             if(x == 1):
+                updateArduino()
                 print("Choose an environment variable:")
+                i=-1
                 while i < 0 or i > len(__EVs__):
                     i = 1
                     for sensor in __EVs__:
@@ -323,7 +326,7 @@ def interface():
                 for ev in __EVs__:
                     if ev.actuator != None:
                         newList.append(ev)
-                
+                i = -1
                 while i < 0 or i > len(newList):
                     i = 1
                     for actuator in newList:
@@ -331,12 +334,12 @@ def interface():
                         i+=1
                     i = int(input())
                 actuator = newList[i-1]
-                    if(actuator.busy):
-                        print("Actuator is busy.")
-                    else:
-                        print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
-                        c = int(input())
-                        envvar.actuator._actuate(c-1)
+                if(actuator.busy):
+                    print("Actuator is busy.")
+                else:
+                    print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
+                    c = int(input())
+                    actuator._actuate(c-1)
             elif(x == 5):
                 break
             elif(x==4):
