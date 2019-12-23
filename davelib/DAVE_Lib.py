@@ -35,15 +35,13 @@ __arduino__ = None  #arduino serial port
 timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
-separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
-formattedTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
 
 #Function Definitions
 def debug(status, level):    #Replaces print
     if(level == 0):
-        print("[!-ERROR-! @"+formattedTime()+"] : "+status)
+        print("[!-ERROR-! @"+str(datetime.datetime.now().time()).split('.')[0]+"] : "+status)
     elif(level <= __debugLevel__):
-        print("[DEBUG !"+str(level)+" @"+formattedTime()+"] : "+status)
+        print("[DEBUG !"+str(level)+" @"+str(datetime.datetime.now().time()).split('.')[0]+"] : "+status)
 
 def formatState(state):
     if(type(state) is float):
@@ -257,9 +255,9 @@ class DBManager:
         debug("Collecting all current sensor data...", 3)
         command = "INSERT INTO sensordata VALUES ("+str(datetime.datetime.now()).split(".")[0]+","
         for sensor in evs[:-1]:
-            command+= sensor.current+","
+            command+= str(sensor.current)+","
             debug("- "+str(sensor.name)+" ("+formatState(sensor.current)+")", 3)
-        command += evs[-1]+");"
+        command += str(evs[-1].current)+");"
         debug("- "+str(evs[-1].name)+" ("+formatState(evs[-1].current)+")", 3)
         debug("Sending all current sensor data to database!", 1)
         self.execute(command)
@@ -325,7 +323,7 @@ def interface():
                 newList = __Actuators__[:]
                 for ev in __EVs__:
                     if ev.actuator != None:
-                        newList.append(ev)
+                        newList.append(ev.actuator)
                 i = -1
                 while i < 0 or i > len(newList):
                     i = 1
