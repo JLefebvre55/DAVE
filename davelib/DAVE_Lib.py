@@ -90,6 +90,7 @@ def read1Wire(wirefile, marker):
     return None    
 
 def holdActuator(actuator, time):
+    debug("Holding actuator '"+actuator.name+"' at state '"+actuator.trajectory+"' for "+str(time)+"s.", 3)
     thread.start_new_thread(_holdActuator, (actuator, time))
     
 def _holdActuator(actuator, time):
@@ -98,12 +99,16 @@ def _holdActuator(actuator, time):
     actuator.busy = False
 
 def readArduinoSensor(name):
-    if name in arduinoData:
-        return arduinoData[name]
+    debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
+    if name in __arduinoData__:
+        return __arduinoData__[name]
+    else:
+        debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
     
 def updateArduino():
+    debug("Updating Arduino data table")
     line = __arduino__.readLine()
-    debug("Read serial: '"+line+"'", 3)
+    debug("Read line from serial: '"+line+"'", 3)
     try:
         data = json.loads(line)
     except ValueError:
@@ -228,29 +233,36 @@ class DBManager:
         self.settings = settings
         try:
             debug("Creating database manager...", 3)
-            self.database = mariadb.connect(host = settings.__dbInfo__["host"], user=settings.__dbInfo__["user"], password=settings.__dbInfo__["password"], database=settings.__dbInfo__["name"])
+            self.database = mariadb.connect(host = settings["host"], user=settings["user"], password=settings["password"], database=settings["name"])
         except mariadb.Error as error:
             print("[ERR]: Error creating database manager; '{}'".format(error))
         self.cursor = self.database.cursor()
         self.setupTables()
         debug("Database manager created!", 3)
     def setupTables(self):
-        debug("Setting up DB tables. Columns:", 3)
+        debug("Setting up DB tables. Columns:", 2)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
         for col in self.settings["columns"][:-1]:
-            debug("- "+col, 3)
+            debug("- "+col, 2)
             command+=col
             command+=","
         command+=self.settings["columns"][-1]
-        debug(self.settings["columns"][-1], 3)
+        debug("- "+self.settings["columns"][-1], 2)
         command+=");"   #terminator
-        self.cursor.execute(command)
+        self.execute(command)
         debug("DB tables set up successfully.")
     def sendSensorData(self, evs):
+        debug("Collecting all current sensor data...", 3)
         command = "INSERT INTO sensordata VALUES ("+str(datetime.datetime.now()).split(".")[0]+","
-        for data in evs[:-1]:
-            command+= evs.current+","
+        for sensor in evs[:-1]:
+            command+= sensor.current+","
+            debug("- "+str(sensor.name)+" ("+formatState(sensor.current)+")", 3)
         command += evs[-1]+");"
+        debug("- "+str(evs[-1].name)+" ("+formatState(evs[-1].current)+")", 3)
+        debug("Sending all current sensor data to database!", 1)
+        self.execute(command)
+    def execute(self, command):
+        debug("Executing MySQL commmand: "+command, 3)
         self.cursor.execute(command)
 
 def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
@@ -261,7 +273,8 @@ def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs)
     __EVs__ = evs
     if(arduino != None):
         __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
-        updateArduino()
+        while(len(__arduinoData__) == 0):
+            updateArduino()
     if(db!=None):
         __databaseManager__ = DBManager(db)
     __setup__ = True
