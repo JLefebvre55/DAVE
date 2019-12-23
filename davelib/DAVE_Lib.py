@@ -35,7 +35,6 @@ timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
-separateArduino = lambda name : __arduinoData__[name]
 formattedTime = lambda : str(datetime.datetime.now().time()).split('.')[0]
 
 #Function Definitions
@@ -102,18 +101,15 @@ def readArduinoSensor(name):
     if name in arduinoData:
         return arduinoData[name]
     
-def readSerialJSON(serial):
-    try:
-        data = json.loads(serial.readLine)
-    except ValueError:
-        debug("Invalid/incomplete JSON from arduino!", 1)
-        return {}
-    else:
-        return data
-    
 def updateArduino():
-    data = readSerialJSON(__arduino__)
-    __arduinoData__[data.name] = data.state
+    line = __arduino__.readLine()
+    debug("Read serial: '"+line+"'", 3)
+    try:
+        data = json.loads(line)
+    except ValueError:
+        debug("Invalid/incomplete JSON from arduino!", 0)
+    else:
+        __arduinoData__[data.name] = data.state
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -257,7 +253,7 @@ class DBManager:
         command += evs[-1]+");"
         self.cursor.execute(command)
 
-def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, arduinoSerial **kwargs):
+def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
     print("Performing first time DAVE setup...")
     global __debugLevel__, __EVs__, __delay__, __setup__, __databaseManager__, __arduino__
     __debugLevel__ = debug
@@ -265,6 +261,7 @@ def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, arduinoSe
     __EVs__ = evs
     if(arduino != None):
         __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
+        updateArduino()
     if(db!=None):
         __databaseManager__ = DBManager(db)
     __setup__ = True
