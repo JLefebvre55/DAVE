@@ -10,6 +10,7 @@ pumpWaterIn = DigitalOutputDevice(6)
 airCooler = DigitalOutputDevice(22)
 waterCooler = DigitalOutputDevice(27)
 growLights = DigitalOutputDevice(25)
+fans = DigitalOutputDevice(12)
 
 wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 
@@ -61,7 +62,9 @@ __EVs__ = [
     EnvironmentVariable("Eletrical Conductivity", 1000, 1250, 1500,
                         Sensor("Arduino-EC Sensor", 4000, readArduinoSensor, "EC"),
                         None),
-    EnvironmentVariable("Light", 0, 1, None,
-                        None,
-                        Actuator("Grow Lights", growLights.on, growLights.off, None))
 ]
+
+__Actuators__ = [
+    Actuator("Grow Lights", growLights.on, growLights.off, None),
+    Actuator("Cirulation Fans", fans.on, fans.off, None)
+    ]

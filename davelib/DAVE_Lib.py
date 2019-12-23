@@ -26,6 +26,7 @@ os.system('modprobe w1-therm')    #^
 
 #EMPTY LISTS - To be filled at declaration
 __EVs__ = []
+__Actuators__ = []
 __arduinoData__ = {}    #Arduino parsed JSON data
 __databaseManager__ = None
 __arduino__ = None  #arduino serial port
@@ -106,8 +107,8 @@ def readArduinoSensor(name):
         debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
     
 def updateArduino():
-    debug("Updating Arduino data table")
-    line = __arduino__.readLine()
+    debug("Updating Arduino data table", 2)
+    line = __arduino__.readline()
     debug("Read line from serial: '"+line+"'", 3)
     try:
         data = json.loads(line)
@@ -265,12 +266,13 @@ class DBManager:
         debug("Executing MySQL commmand: "+command, 3)
         self.cursor.execute(command)
 
-def setup(evs = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
+def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
     print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __delay__, __setup__, __databaseManager__, __arduino__
+    global __debugLevel__, __EVs__, __Actuators__, __delay__, __setup__, __databaseManager__, __arduino__
     __debugLevel__ = debug
     __delay__ = delay
     __EVs__ = evs
+    __Actuators__ = actuators
     if(arduino != None):
         __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
         while(len(__arduinoData__) == 0):
@@ -295,12 +297,47 @@ def run():
             
 def interface():
     if(__setup__):
-        exit = False
         print("Welcome to the DAVE manual interface!\n")
         while True:
-            print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Quit")
-            x = int(input())
-            if(x == 5):
+            x=-1
+            while x < 0 or x > 5:
+                print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Quit")
+                x = int(input())
+            
+            if(x == 1):
+                print("Choose an environment variable:")
+                while i < 0 or i > len(__EVs__):
+                    i = 1
+                    for sensor in __EVs__:
+                        print(str(i)+": "+sensor.name)
+                        i+=1
+                    i = int(input())
+                __EVs__[i-1].update()
+                print("Attached sensor: "+__EVs__[i-1].sensor.name)
+                print("State: "+str(__EVs__[i-1].current))
+                    
+            elif(x == 2):
+                print("Choose an actuator:")
+                #Create compound list of EVs with actuators as well as standalone actuators
+                newList = __Actuators__[:]
+                for ev in __EVs__:
+                    if ev.actuator != None:
+                        newList.append(ev)
+                
+                while i < 0 or i > len(newList):
+                    i = 1
+                    for actuator in newList:
+                        print(str(i)+": "+actuator.name)
+                        i+=1
+                    i = int(input())
+                actuator = newList[i-1]
+                    if(actuator.busy):
+                        print("Actuator is busy.")
+                    else:
+                        print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
+                        c = int(input())
+                        envvar.actuator._actuate(c-1)
+            elif(x == 5):
                 break
             elif(x==4):
                 __databaseManager__.sendSensorData(__EVs__)
@@ -313,31 +350,6 @@ def interface():
                     print("[ERR]: {}".format(error))
                 except IndexError as error:
                     print("[ERR]: Table has no rows!")
-            else:
-                print("Choose an environment variable:")
-                i = 1
-                for envvar in __EVs__:
-                    print(str(i)+": "+envvar.name)
-                    i+=1
-                i = int(input())
-                envvar = __EVs__[i-1]
-                if(x==1):
-                    if(envvar.sensor != None):
-                        envvar.update()
-                        print("Attached sensor: "+envvar.sensor.name)
-                        print("State: "+str(envvar.current))
-                    else:
-                        print("No attached sensor!")
-                elif (x == 2):
-                    if(envvar.actuator != None):
-                        if(envvar.actuator.busy):
-                            print("Actuator is busy.")
-                        else:
-                            print("Actuate as if variable was:\n1. Too low (up)\n2. In range (default)\n3. Too high (down)")
-                            c = int(input())
-                            envvar.actuator._actuate(c-1)
-                    else:
-                        print("No attached actuator!")
         print("Goodbye!")
         sleep(1)
     else:
