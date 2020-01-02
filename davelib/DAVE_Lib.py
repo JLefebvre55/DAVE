@@ -35,6 +35,7 @@ __arduino__ = None  #arduino serial port
 timems = lambda : int(Time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
+separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
 
 #Function Definitions
 def debug(status, level):    #Replaces print
@@ -89,7 +90,7 @@ def read1Wire(wirefile, marker):
     return None    
 
 def holdActuator(actuator, time):
-    debug("Holding actuator '"+actuator.name+"' at state '"+actuator.trajectory+"' for "+str(time)+"s.", 3)
+    debug("Holding actuator '"+actuator.name+"' at state '"+str(actuator.trajectory)+"' for "+str(time)+"s.", 3)
     thread.start_new_thread(_holdActuator, (actuator, time))
     
 def _holdActuator(actuator, time):
@@ -239,6 +240,7 @@ class DBManager:
         self.cursor = self.database.cursor()
         self.setupTables()
         debug("Database manager created!", 3)
+        self.lastUpdate = timems()
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 2)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
@@ -253,7 +255,11 @@ class DBManager:
         debug("DB tables set up successfully.", 2)
     def sendSensorData(self, evs):
         debug("Collecting all current sensor data...", 3)
-        command = "INSERT INTO sensordata VALUES ("+str(datetime.datetime.now()).split(".")[0]+","
+        command = "INSERT INTO sensordata ("
+        for col in self.settings["columns"][1:-1]:
+            command+=col.split(" ")[0]+","
+        command+=(self.settings["columns"][-1]).split(" ")[0]
+        command += ") VALUES (\""+str(datetime.datetime.now()).split(".")[0]+"\","
         for sensor in evs[:-1]:
             command+= str(sensor.current)+","
             debug("- "+str(sensor.name)+" ("+formatState(sensor.current)+")", 3)
@@ -291,6 +297,9 @@ def run():
                 if(ev.sensor != None):
                     print(ev.name+": "+formatState(ev.current))
                 sleep(__delay__)
+            if((timems() - __databaseManager__.lastUpdate)/1000 > 10):
+                __databaseManager__.sendSensorData(__EVs__)
+                __databaseManager__.lastUpdate = timems()
     else:
         print("[ERR]: Setup has not yet been performed!")
             

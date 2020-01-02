@@ -44,9 +44,9 @@ __delay__ = 1
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
 __EVs__ = [
-    EnvironmentVariable("Air Humidity (%H)", 80, 100, 90,
+    EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
-                        None),
+                        Actuator("Cirulation Fans", None, fans.off, fans.on)),
     EnvironmentVariable("Air Temperature (C)", 12, 15, 14,
                         Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1), 
                         Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
@@ -65,6 +65,5 @@ __EVs__ = [
 ]
 
 __Actuators__ = [
-    Actuator("Grow Lights", growLights.on, growLights.off, None),
-    Actuator("Cirulation Fans", fans.on, fans.off, None)
+    Actuator("Grow Lights", growLights.on, growLights.off, None)
     ]
