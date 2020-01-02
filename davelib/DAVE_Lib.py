@@ -112,10 +112,12 @@ def updateArduino():
     try:
         data = json.loads(line)
     except ValueError:
-        debug("Invalid/incomplete JSON from arduino!", 0)
-    else:
+        debug("Incomplete JSON from arduino!", 0)
+    elif("state" in data.keys() and "name" in data.keys()):
         debug("Parsed JSON dict object: "+str(data), 3)
         __arduinoData__[data["name"]] = data["state"]
+    else:
+        debug("Invalid JSON from arduino!", 0)
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -269,7 +271,10 @@ class DBManager:
         self.execute(command)
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
-        self.cursor.execute(command)
+        try:
+            self.cursor.execute(command)
+        except mariadb.Error as e:
+            debug("MySQL Error: '"+str(e)+"'", 0)
 
 def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
     print("Performing first time DAVE setup...")
