@@ -25,6 +25,11 @@ CREATE TABLE sensordata(
     electric_conductivity DECIMAL(6,2) NOT NULL
 );
 
+SELECT * INTO OUTFILE '/home/pi/Desktop/test.csv'
+  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
+  LINES TERMINATED BY '\n'
+  FROM sensordata;
+
 ##ONE LINER##
 CREATE TABLE sensordata(id INT PRIMARY KEY AUTO_INCREMENT,timestamp TIMESTAMP NOT NULL,airhum DECIMAL(4,2) NOT NULL,airtemp DECIMAL(4,2) NOT NULL,waterlevel_ishigh boolean NOT NULL,ph DECIMAL(4,2) NOT NULL,electric_conductivity DECIMAL(6,2) NOT NULL);
 

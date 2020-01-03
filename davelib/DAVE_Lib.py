@@ -5,7 +5,7 @@
     #All major classes (see below)
 
 from gpiozero import LED, Button, DigitalOutputDevice
-from time import sleep, time as Time
+from time import sleep, time
 import datetime
 import Adafruit_DHT
 import os
@@ -30,9 +30,11 @@ __Actuators__ = []
 __arduinoData__ = {}    #Arduino parsed JSON data
 __databaseManager__ = None
 __arduino__ = None  #arduino serial port
+__camera__ = PiCamera()
+__camera__.resolution = (320,240)
 
 #Oneliner functions
-timems = lambda : int(Time()*1000)
+timems = lambda : int(time()*1000)
 pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
@@ -107,17 +109,22 @@ def readArduinoSensor(name):
     
 def updateArduino():
     debug("Updating Arduino data table", 2)
-    line = __arduino__.readline()
+    try:
+        line = __arduino__.readline()[:-1]
+    except Exception as e:
+        debug("Serial error: '"+str(e)+"'", 0)
+        return
     debug("Read line from serial: '"+line+"'", 3)
     try:
         data = json.loads(line)
     except ValueError:
         debug("Incomplete JSON from arduino!", 0)
-    elif("state" in data.keys() and "name" in data.keys()):
-        debug("Parsed JSON dict object: "+str(data), 3)
-        __arduinoData__[data["name"]] = data["state"]
     else:
-        debug("Invalid JSON from arduino!", 0)
+        if("state" in data.keys() and "name" in data.keys()):
+            debug("Parsed JSON dict object: "+str(data), 3)
+            __arduinoData__[data["name"]] = data["state"]
+        else:
+            debug("Invalid JSON from arduino!", 0)
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -242,7 +249,7 @@ class DBManager:
         self.cursor = self.database.cursor()
         self.setupTables()
         debug("Database manager created!", 3)
-        self.lastUpdate = timems()
+        self.lastUpdate = time()
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 2)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
@@ -302,9 +309,24 @@ def run():
                 if(ev.sensor != None):
                     print(ev.name+": "+formatState(ev.current))
                 sleep(__delay__)
-            if((timems() - __databaseManager__.lastUpdate)/1000 > 10):
+            updateArduino()
+            if(time() - __databaseManager__.lastUpdate > 3600):
                 __databaseManager__.sendSensorData(__EVs__)
                 __databaseManager__.lastUpdate = timems()
+                
+                light = None
+                for a in __Actuators__:
+                    if(a.name == "Lights"):
+                        light = a
+                        break
+                if(light != None):
+                    light._actuate(0)
+                    __camera__.start_preview()
+                    sleep(3)
+                    __camera__.capture('/home/pi/Desktop/dave_photos/dave_'+str(datetime.datetime.now()).split(".")[0].replace(' ','_')+'.jpg')
+                    __camera__.stop_preview()
+                    light._actuate(1)
+                    
     else:
         print("[ERR]: Setup has not yet been performed!")
             

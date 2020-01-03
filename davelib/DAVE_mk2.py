@@ -65,5 +65,5 @@ __EVs__ = [
 ]
 
 __Actuators__ = [
-    Actuator("Grow Lights", growLights.on, growLights.off, None)
+    Actuator("Lights", growLights.on, growLights.off, None)
     ]
