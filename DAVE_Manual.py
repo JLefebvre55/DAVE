@@ -1,5 +1,5 @@
-from davelib import DAVE_Lib as dave, DAVE_mk2 as mk2
+from davelib import DAVE_Lib as dave, DAVE_mk3 as settings
 
 #evs, debug, delay, arduino, db
-dave.setup(evs = mk2.__EVs__, actuators = mk2.__Actuators__, debug = 3, delay = mk2.__delay__, arduino = mk2.__arduinoInfo__, db = mk2.__dbInfo__)
+dave.setup(evs = settings.__EVs__, actuators = settings.__Actuators__, debug = 3, delay = settings.__delay__, arduino = settings.__arduinoInfo__, db = settings.__dbInfo__)
 dave.interface()

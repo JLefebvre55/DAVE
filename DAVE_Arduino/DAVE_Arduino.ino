@@ -15,7 +15,7 @@ void setup()
  {
   printAnalog1(); //print sensor value 
   printAnalog2(); //print units and skip to next line
-  delay(4000); //wait between reads
+  delay(2000); //wait between reads
  
  }
 
