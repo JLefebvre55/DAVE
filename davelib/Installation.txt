@@ -1,0 +1,51 @@
+##RASPBERRY PI SOFTWARE##
+sudo apt-get install mariadb-server
+sudo mysql_secure_installation
+https://pimylifeup.com/raspberry-pi-mysql/
+sudo apt-get -y install python-mysql.connector
+
+##DATABASE SETUP##
+sudo mysql -u root -p
+CREATE DATABASE davedb;
+CREATE USER 'dave'@'localhost' IDENTIFIED BY 'password';
+GRANT ALL PRIVILEGES ON davedb.* TO 'dave'@'localhost';
+FLUSH PRIVILEGES;
+
+##TABLE SETUP##
+USE davedb;
+
+CREATE TABLE sensordata(
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    timestamp TIMESTAMP NOT NULL,
+    airhum DECIMAL(4,2) NOT NULL,
+    airtemp DECIMAL(4,2) NOT NULL,
+    waterlevel_ishigh boolean NOT NULL,
+    watertemp DECIMAL(4,2) NOT NULL,
+    ph DECIMAL(4,2) NOT NULL,
+    electric_conductivity DECIMAL(6,2) NOT NULL
+);
+
+SELECT * INTO OUTFILE '/home/pi/Desktop/test.csv'
+  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
+  LINES TERMINATED BY '\n'
+  FROM sensordata;
+
+##ONE LINER##
+CREATE TABLE sensordata(id INT PRIMARY KEY AUTO_INCREMENT,timestamp TIMESTAMP NOT NULL,airhum DECIMAL(4,2) NOT NULL,airtemp DECIMAL(4,2) NOT NULL,waterlevel_ishigh boolean NOT NULL,ph DECIMAL(4,2) NOT NULL,electric_conductivity DECIMAL(6,2) NOT NULL);
+
+CREATE TABLE actuatordata(
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    timestamp TIMESTAMP NOT NULL,
+    aircooler BOOLEAN NOT NULL,
+    watercooler BOOLEAN NOT NULL,
+    waterin BOOLEAN NOT NULL,
+    lights BOOLEAN NOT NULL
+);
+
+##PYTHON SETUP##
+import mysql.connector as mariadb
+__database__ = mariadb.connect(host = dbInfo["host"], user=dbInfo["user"], password=dbInfo["password"], database=dbInfo["name"])
+
+##DB BACKUP##
+BACKUP DATABASE name
+TO DISK = 'filepath';
