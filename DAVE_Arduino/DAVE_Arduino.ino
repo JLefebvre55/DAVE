@@ -13,12 +13,12 @@ void setup()
 
  void loop()
  {
-  Serial.print("[")
+  Serial.print("[");
   printAnalog1(); //print sensor value 
-  Serial.print(",")
+  Serial.print(",");
   printAnalog2(); //print units and skip to next line
-  Serial.println("]")
-  delay(2000); //wait between reads
+  Serial.println("]");
+  delay(1000); //wait between reads
  
  }
 

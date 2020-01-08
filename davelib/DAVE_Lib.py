@@ -109,23 +109,34 @@ def readArduinoSensor(name):
     
 def updateArduino():
     debug("Updating Arduino data table", 2)
-    try:
-        line = __arduino__.readline()[:-1]
-    except Exception as e:
-        debug("Serial error: '"+str(e)+"'", 0)
-        return
-    debug("Read line from serial: '"+line+"'", 3)
-    try:
-        data = json.loads(line)
-    except ValueError:
-        debug("Incomplete JSON from arduino!", 0)
-    else:
-        if("state" in data[0].keys() and "name" in data[0].keys() and "state" in data[1].keys() and "name" in data[1].keys()):
-            debug("Parsed JSON dict object: "+str(data), 3)
+    #Read serial until valid data occurs
+    while True:
+        #Successful read?
+        try:
+            line = __arduino__.readline()[:-1]
+        except Exception as e:
+            debug("Serial error: '"+str(e)+"'", 0)
+            sleep(1)
+            continue
+        debug("Read line from serial: '"+line+"'", 3)
+        #Successful parse?
+        try:
+            data = json.loads(line)
+        except ValueError:
+            debug("Incomplete JSON from arduino!", 0)
+            sleep(1)
+            continue
+        if(type(data) is list):
+            for sensor in data:
+                if "state" not in sensor.keys() or "name" not in sensor.keys():
+                    debug("Missing data in JSON from arduino!")
+                    sleep(1)
+                    continue
+            debug("Sucessfully parsed valid JSON: "+str(data), 3)
             for sensor in data:
                 __arduinoData__[sensor["name"]] = sensor["state"]
         else:
-            debug("Invalid JSON from arduino!", 0)
+            debug("Non-list data from arduino!", 0)
 
 #MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
 
@@ -323,8 +334,7 @@ def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db =
     __Actuators__ = actuators
     if(arduino != None):
         __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
-        while(len(__arduinoData__) == 0):
-            updateArduino()
+        updateArduino()
     if(db!=None):
         __databaseManager__ = DBManager(db)
     if(cam != None):
@@ -342,7 +352,6 @@ def run():
                 if(ev.sensor != None):
                     print(ev.name+": "+formatState(ev.current))
                 sleep(__delay__)
-            updateArduino()
             if(time() - __databaseManager__.lastUpdate > __databaseManager__.delta):
                 __databaseManager__.sendSensorData(__EVs__)
             if(time() - __cameraManager__.lastCapture > __cameraManager__.delta):
@@ -356,12 +365,11 @@ def interface():
         print("Welcome to the DAVE manual interface!\n")
         while True:
             x=-1
-            while x < 0 or x > 5:
-                print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Quit")
+            while x < 0 or x > 6:
+                print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Take a photo\n6: Quit")
                 x = int(input())
             
             if(x == 1):
-                updateArduino()
                 print("Choose an environment variable:")
                 i=-1
                 while i < 0 or i > len(__EVs__):
@@ -395,8 +403,11 @@ def interface():
                     print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
                     c = int(input())
                     actuator._actuate(c-1)
-            elif(x == 5):
+            elif(x == 6):
                 break
+            elif(x == 5):
+                __cameraManager__.capture()
+                print("Captured!")
             elif(x==4):
                 __databaseManager__.sendSensorData(__EVs__)
             elif(x == 3):
