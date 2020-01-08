@@ -17,10 +17,11 @@ wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 #!!! DB COLUMN ORDER AND TYPE MUST MATCH ENVIRONMENT VARIABLE ORDER AND TYPE !!!
 #...excluding id and timestamp
 
-__dbInfo__ = {"name" : "davedb", 
+dbInfo = {"name" : "davedb", 
               "user" : "dave", 
               "password" : "password",
               "host" : "localhost",
+              'delta': 15,
               "columns": ["id INT PRIMARY KEY AUTO_INCREMENT", #index
                           "timestamp TIMESTAMP NOT NULL", #timestamp
                           "airhum DECIMAL(4,2) NOT NULL",
@@ -31,19 +32,19 @@ __dbInfo__ = {"name" : "davedb",
                           "electric_conductivity DECIMAL(6,2) NOT NULL"]
               }
 
-__arduinoInfo__ = {
+arduinoInfo = {
     "serial" : '/dev/ttyACM0',
     "baud" : 9600
 }
 
 #constants
-__hasCamera__ = True
-__hasArduino__ = True
-__delay__ = 1
+hasCamera = True
+hasArduino = True
+delay = 1
 
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
-__EVs__ = [
+EVs = [
     EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
                         None),
@@ -68,6 +69,13 @@ __EVs__ = [
                         None),
 ]
 
-__Actuators__ = [
+Actuators = [
     Actuator("Lights", growLights.on, growLights.off, None)
     ]
+
+cameraInfo = {
+    "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
+    "light" : Actuators[0],
+    "resolution": (320, 240),
+    'delta' : 15
+}

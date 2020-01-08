@@ -29,9 +29,8 @@ __EVs__ = []
 __Actuators__ = []
 __arduinoData__ = {}    #Arduino parsed JSON data
 __databaseManager__ = None
+__cameraManager__ = None
 __arduino__ = None  #arduino serial port
-__camera__ = PiCamera()
-__camera__.resolution = (320,240)
 
 #Oneliner functions
 timems = lambda : int(time()*1000)
@@ -101,6 +100,7 @@ def _holdActuator(actuator, time):
     actuator.busy = False
 
 def readArduinoSensor(name):
+    updateArduino()
     debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
     if name in __arduinoData__:
         return __arduinoData__[name]
@@ -120,9 +120,10 @@ def updateArduino():
     except ValueError:
         debug("Incomplete JSON from arduino!", 0)
     else:
-        if("state" in data.keys() and "name" in data.keys()):
+        if("state" in data[0].keys() and "name" in data[0].keys() and "state" in data[1].keys() and "name" in data[1].keys()):
             debug("Parsed JSON dict object: "+str(data), 3)
-            __arduinoData__[data["name"]] = data["state"]
+            for sensor in data:
+                __arduinoData__[sensor["name"]] = sensor["state"]
         else:
             debug("Invalid JSON from arduino!", 0)
 
@@ -147,7 +148,7 @@ class Sensor:
             return temp
         else:
             debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.", 3)
-        
+
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
     def __init__(self, name, funcUp, funcDefault, funcDown, passEnvVar = (False, False, False), passActuator = (False, False, False), args0 = [], args1 = [], args2 = [], **kwargs):
@@ -241,6 +242,7 @@ class EnvironmentVariable:
 class DBManager:
     def __init__(self, settings):
         self.settings = settings
+        self.delta = settings['delta']
         try:
             debug("Creating database manager...", 3)
             self.database = mariadb.connect(host = settings["host"], user=settings["user"], password=settings["password"], database=settings["name"])
@@ -276,6 +278,7 @@ class DBManager:
         debug("- "+str(evs[-1].name)+" ("+formatState(evs[-1].current)+")", 3)
         debug("Sending all current sensor data to database!", 1)
         self.execute(command)
+        self.lastUpdate = time()
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
         try:
@@ -283,9 +286,37 @@ class DBManager:
         except mariadb.Error as e:
             debug("MySQL Error: '"+str(e)+"'", 0)
 
-def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db = None, **kwargs):
+class CameraManager:
+    def __init__(self, settings):
+        debug("Creating camera manager...", 1)
+        self.light = settings['light']
+        self.camera = PiCamera()
+        self.camera.resolution = settings["resolution"]
+        if settings["path"][-1] is not '/':
+            settings["path"].append('/')
+        self.path = settings["path"]
+        self.delta = settings['delta']
+        self.lastCapture = time()
+    def capture(self):
+        if(self.light != None):
+            self.light._actuate(0)
+            self._capture()
+            self.light._actuate(1)
+        else:
+            self._capture()
+        self.lastCapture = time()
+    def _capture(self):
+        debug("Capturing an image!", 1)
+        self.camera.start_preview()
+        sleep(3)
+        self.camera.capture(self.formatPath())
+        self.camera.stop_preview()
+    def formatPath(self):
+        return '{0}dave_{1}.jpg'.format(self.path, str(datetime.datetime.now()).split(".")[0].replace(' ','_'))
+
+def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db = None, cam = None, **kwargs):
     print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __Actuators__, __delay__, __setup__, __databaseManager__, __arduino__
+    global __debugLevel__, __EVs__, __Actuators__, __delay__, __setup__, __databaseManager__, __arduino__, __cameraManager__
     __debugLevel__ = debug
     __delay__ = delay
     __EVs__ = evs
@@ -296,6 +327,8 @@ def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db =
             updateArduino()
     if(db!=None):
         __databaseManager__ = DBManager(db)
+    if(cam != None):
+        __cameraManager__ = CameraManager(cam)
     __setup__ = True
     
 def run():
@@ -310,22 +343,10 @@ def run():
                     print(ev.name+": "+formatState(ev.current))
                 sleep(__delay__)
             updateArduino()
-            if(time() - __databaseManager__.lastUpdate > 3600):
+            if(time() - __databaseManager__.lastUpdate > __databaseManager__.delta):
                 __databaseManager__.sendSensorData(__EVs__)
-                __databaseManager__.lastUpdate = timems()
-                
-                light = None
-                for a in __Actuators__:
-                    if(a.name == "Lights"):
-                        light = a
-                        break
-                if(light != None):
-                    light._actuate(0)
-                    __camera__.start_preview()
-                    sleep(3)
-                    __camera__.capture('/home/pi/Desktop/dave_photos/dave_'+str(datetime.datetime.now()).split(".")[0].replace(' ','_')+'.jpg')
-                    __camera__.stop_preview()
-                    light._actuate(1)
+            if(time() - __cameraManager__.lastCapture > __cameraManager__.delta):
+                __cameraManager__.capture()
                     
     else:
         print("[ERR]: Setup has not yet been performed!")
