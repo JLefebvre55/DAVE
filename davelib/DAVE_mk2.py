@@ -70,8 +70,8 @@ evs = [
 acts = [
     Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
                        [
-                           {"index" : 2, "timestamp" : timestamp(8)},
-                           {"index" : 0, "timestamp" : timestamp(16)}
+                           {"index" : 0, "timestamp" : timestamp(8)},
+                           {"index" : 2, "timestamp" : timestamp(16)}
                         ]
                        )
     ]

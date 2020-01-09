@@ -17,7 +17,6 @@ from picamera import PiCamera
 import mysql.connector as mariadb
 
 secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-timems = lambda : int(time()*1000)
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
 
@@ -95,8 +94,11 @@ def readArduinoSensor(name):
 def updateArduino():
     debug("Updating Arduino data table", 2)
     #Read serial until valid data occurs
+    attempt = 0
     while True:
         #Successful read?
+        attempt+=1
+        debug("Arduino read attempt {}".format(attempt), 3)
         try:
             line = __arduino__.readline()[:-1]
         except Exception as e:
@@ -137,14 +139,14 @@ class Sensor:
         self.args = args
         
     def read(self):
-        if(timems() - self.lastread >= self.delay):
+        if(time() - self.lastread >= self.delay):
             debug("Reading sensor '"+self.name+"'...", 2)
             temp = self.func(*self.args)
-            self.lastread = timems()
+            self.lastread = time()
             debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
         else:
-            debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.", 3)
+            debug("Not ready to read '"+self.name+"', wait "+str(time() - self.lastread)+"s.", 3)
 
 #pass
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
@@ -217,7 +219,7 @@ class Actuator:
         debug("Running autoscheduler for {}...".format(self.name), 1)
         while self.runningSchedule:
             if(datetime.now().time() > self.schedule[i]["timestamp"]):
-                actuator.actuate(self.schedule[i]["index"])
+                self.actuate(self.schedule[i]["index"])
                 debug("Autoscheduler: Setting actuator {} to index {} at time {}.".format(self.name, self.schedule[i]["index"], self.schedule[i]["timestamp"]), 1)
                 #increment and bound
                 i = (i+1)%len(self.schedule)
@@ -263,16 +265,16 @@ class EnvironmentVariable:
         elif(self.current <= self.min):
             debug("'"+self.name+"' is too low! "+str(self.current)+" <= "+str(self.min), 2)
             index = 0
-        if self.actuator is None: #then must be a 
+        elif self.actuator is None: #then must be a 
             if(abs(self.current-self.optimal) < self.tolerance):
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".", 2)
+            return
         else:
             if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory), 2)
                 index = 1
         #Act
-        if(self.actuator is not None):
-            self.actuator.actuate(index)
+        self.actuator.actuate(index)
     def read(self):
         temp = self.sensor.read()
         if(temp != None):
@@ -353,7 +355,7 @@ class CameraManager:
         self.lastCapture = 0
     def capture(self):
         if(time() - self.lastCapture > self.delta):
-            if(self.light != None):
+            if(self.light is not None and self.light.trajectory is not 0):
                 self.light.actuate(0)
                 self._capture()
                 self.light.actuate(1)
