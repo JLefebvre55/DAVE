@@ -17,7 +17,7 @@ wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 #!!! DB COLUMN ORDER AND TYPE MUST MATCH ENVIRONMENT VARIABLE ORDER AND TYPE !!!
 #...excluding id and timestamp
 
-sensorDatabase = {"name" : "davedb", 
+db = {"name" : "davedb", 
               "user" : "dave", 
               "password" : "password",
               "host" : "localhost",
@@ -32,34 +32,16 @@ sensorDatabase = {"name" : "davedb",
                           "electric_conductivity DECIMAL(6,2) NOT NULL"]
               }
 
-actuatorDatabase = {"name" : "davedb", 
-              "user" : "dave", 
-              "password" : "password",
-              "host" : "localhost",
-              'delta': 15,
-              "columns": ["id INT PRIMARY KEY AUTO_INCREMENT", #index
-                          "timestamp TIMESTAMP NOT NULL", #timestamp
-                          "airhum DECIMAL(4,2) NOT NULL",
-                          "airtemp DECIMAL(4,2) NOT NULL",
-                          "waterlevel_ishigh boolean NOT NULL",
-                          "watertemp DECIMAL(4,2) NOT NULL",
-                          "ph DECIMAL(4,2) NOT NULL",
-                          "electric_conductivity DECIMAL(6,2) NOT NULL"]
-              }
-
-arduinoInfo = {
+ard = {
     "serial" : '/dev/ttyACM0',
     "baud" : 9600
 }
 
 #constants
-hasCamera = True
-hasArduino = True
 delay = 1
 
-
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
-EVs = [
+evs = [
     EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
                         Actuator),
@@ -85,7 +67,7 @@ EVs = [
 ]
 
 #A schedule is a list of "index"-"delta" pairs controlling an actuator. 0-up, 1-def, 2-down
-ScheduledActuators = [
+acts = [
     Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
                        [
                            {"index" : 2, "timestamp" : timestamp(8)},
@@ -96,7 +78,7 @@ ScheduledActuators = [
 
 
 
-cameraInfo = {
+cam = {
     "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
     "light" : Actuators[0],
     "resolution": (1280, 720),

@@ -265,7 +265,7 @@ class EnvironmentVariable:
                 index = 0
             if self.actuator is None: #then must be a 
                 if(abs(self.current-self.optimal) < self.tolerance):
-                    print("'"+self.name+"' has reached optimal. "+str(self.current)+" is ±"+str(self.tolerance)+" of "+str(self.optimal)+".")
+                    print("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".")
             else:
                 if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
                     print("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory))
@@ -305,7 +305,7 @@ class DBManager:
         else:
             debug("DB tables set up successfully.", 2)
     def sendSensorData(self, evs):
-        if(time() - self.lastUpdate > self.delta)
+        if(time() - self.lastUpdate > self.delta):
             debug("Collecting all current sensor data...", 3)
             
             command = "INSERT INTO sensordata ("
@@ -372,7 +372,7 @@ class CameraManager:
 
 #pass
 class DAVE:
-    __init__(self, evs, actuators, debug, delay, ard, db, cam):
+    def __init__(self, evs, actuators, debug, delay, ard, db, cam):
         self.evs = evs
         self.scheduledActuators = actuators
         self.debugLevel = debug
