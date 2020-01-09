@@ -264,7 +264,8 @@ class EnvironmentVariable:
                 debug("'"+self.name+"' is too low! "+str(self.current)+" <= "+str(self.min), 2)
                 index = 0
             if self.actuator is None: #then must be a 
-                if(abs(self.current-self.optimal) < self.tolerance)
+                if(abs(self.current-self.optimal) < self.tolerance):
+                    print("'"+self.name+"' has reached optimal. "+str(self.current)+" is ±"+str(self.tolerance)+" of "+str(self.optimal)+".")
             else:
                 if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
                     print("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory))
