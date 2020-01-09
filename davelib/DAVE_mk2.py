@@ -44,7 +44,7 @@ delay = 1
 evs = [
     EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
-                        Actuator),
+                        Actuator("Exhaust Fans", None, fans.off, fans.on)),
                         #Actuator("Cirulation Fans", None, fans.off, fans.on)),
     EnvironmentVariable.noActuator("Air Temperature (C)", 12, 15, 13.5,
                         Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1), 
@@ -80,7 +80,7 @@ acts = [
 
 cam = {
     "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
-    "light" : Actuators[0],
+    "light" : acts[0],
     "resolution": (1280, 720),
     'delta' : 1200
 }
