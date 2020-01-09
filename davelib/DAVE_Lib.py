@@ -87,7 +87,6 @@ def readArduinoSensor(name):
     updateArduino()
     debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
     if name in __arduinoData__:
-        if __arduionData[name] is None : print("IMPORTANT -- Arduino {} fetched as None".format(name))
         return __arduinoData__[name]
     else:
         debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
@@ -265,12 +264,11 @@ class EnvironmentVariable:
             debug("'"+self.name+"' is too low! "+str(self.current)+" <= "+str(self.min), 2)
             index = 0
         if self.actuator is None: #then must be a 
-            print("DEBUG IMPORTANT ----- CURRENT : {} | OPTIMAL : {}".format(self.current, self.optimal))
             if(abs(self.current-self.optimal) < self.tolerance):
-                print("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".")
+                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".", 2)
         else:
             if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
-                print("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory))
+                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory), 2)
                 index = 1
         #Act
         if(self.actuator is not None):
