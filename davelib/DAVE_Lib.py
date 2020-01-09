@@ -90,7 +90,7 @@ def readArduinoSensor(name):
         if name in __arduinoData__:
             if(__arduinoData__[name] is None):
                 continue
-            else: return 
+            else: return __arduinoData__[name] 
         else:
             debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
 
@@ -122,7 +122,7 @@ def updateArduino():
                 if "state" not in sensor.keys() or "name" not in sensor.keys():
                     debug("Missing data in JSON from arduino!", 0)
                     sleep(1)
-                    continue
+                    return None
             debug("Sucessfully parsed valid JSON: "+str(data), 3)
             for sensor in data:
                 __arduinoData__[sensor["name"]] = sensor["state"]
@@ -143,9 +143,13 @@ class Sensor:
         self.args = args
         
     def read(self):
-        if(time() - self.lastread >= self.delay):
+        if(timems() - self.lastread >= self.delay):
             debug("Reading sensor '"+self.name+"'...", 2)
             temp = self.func(*self.args)
+            if temp is None: 
+                debug("Sensor {} read as None; is this supposed to happen?".format(self.name), 0)
+
+            
             self.lastread = timems()
             debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
@@ -216,13 +220,13 @@ class Actuator:
         elif index is 2: return 'down'
     def checkSchedule(self):
         debug("Checking schedule for {}...".format(self.name), 3)
-        while self.runningSchedule:
-            if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
-                self.actuate(self.schedule[self.scheduleIndex]["index"])
-                debug("Scheduler: Setting actuator {} to index {} at time {} (past {}).".format(self.name, self.schedule[self.scheduleIndex]["index"], datetime.now().time(), self.schedule[self.scheduleIndex]["timestamp"]), 1)
-                #increment and bound
-                self.scheduleIndex = (self.scheduleIndex+1)%len(self.schedule)
-            sleep(60)
+        
+        if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
+            self.actuate(self.schedule[self.scheduleIndex]["index"])
+            debug("Scheduler: Setting actuator {} to index {} at time {} (past {}).".format(self.name, self.schedule[self.scheduleIndex]["index"], datetime.now().time(), self.schedule[self.scheduleIndex]["timestamp"]), 1)
+            #increment and bound
+            self.scheduleIndex = (self.scheduleIndex+1)%len(self.schedule)
+            
     def hold(self, time):
         debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
         thread.start_new_thread(self._hold, (time,))
@@ -252,7 +256,8 @@ class EnvironmentVariable:
     #Enacts all steps of the Sense,Plan,Act model
     def update(self):
         #Sense
-        self.read()
+        temp = self.read()
+        if temp is not None: self.current = temp
         index = 1
         #Plan
         if(self.current >= self.max):
@@ -408,7 +413,7 @@ class DAVE:
                     print(ev.name+": "+formatState(ev.current))
                 sleep(self.delay)
             for actuator in self.scheduledActuators:
-                actuator.autoSchedule()
+                actuator.checkSchedule()
             self.database.sendSensorData(self.evs)
             self.camera.capture()
     def interface(self):
