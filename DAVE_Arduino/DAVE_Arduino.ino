@@ -13,9 +13,12 @@ void setup()
 
  void loop()
  {
+  Serial.print("[");
   printAnalog1(); //print sensor value 
+  Serial.print(",");
   printAnalog2(); //print units and skip to next line
-  delay(2000); //wait between reads
+  Serial.println("]");
+  delay(1000); //wait between reads
  
  }
 
@@ -24,7 +27,7 @@ void printAnalog2(){
   float sensorValue=A2SLOPE*voltage+A2INTERCEPT; //convert to sensor value with linear calibration equation 
   Serial.print("{\"name\" : \"pH\", \"state\" : ");
   Serial.print(sensorValue);
-  Serial.println("}");
+  Serial.print("}");
 }
 
 
@@ -33,7 +36,7 @@ void printAnalog1(){
   //float sensorValue=Vernier.slope()*voltage+Vernier.intercept(); //convert to sensor value with linear calibration equation 
   Serial.print("{\"name\" : \"EC\", \"state\" : ");
   Serial.print(Vernier.readSensor());
-  Serial.println("}");
+  Serial.print("}");
 }
  
  

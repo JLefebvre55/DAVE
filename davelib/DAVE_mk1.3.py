@@ -6,21 +6,19 @@ from DAVE_Lib import *
 waterlevel = Button(17)
 
 #Output Pins
-pumpWaterIn = DigitalOutputDevice(6)
-airCooler = DigitalOutputDevice(22)
-waterCooler = DigitalOutputDevice(27)
-growLights = DigitalOutputDevice(25)
-fans = DigitalOutputDevice(12)
+growLights = DigitalOutputDevice(6)
+fans = DigitalOutputDevice(22)
 
 wirefilesrc = find1Wire('/sys/bus/w1/devices', '28-')
 
 #!!! DB COLUMN ORDER AND TYPE MUST MATCH ENVIRONMENT VARIABLE ORDER AND TYPE !!!
 #...excluding id and timestamp
 
-__dbInfo__ = {"name" : "davedb", 
+dbInfo = {"name" : "davedb", 
               "user" : "dave", 
               "password" : "password",
               "host" : "localhost",
+              'delta': 15,
               "columns": ["id INT PRIMARY KEY AUTO_INCREMENT", #index
                           "timestamp TIMESTAMP NOT NULL", #timestamp
                           "airhum DECIMAL(4,2) NOT NULL",
@@ -31,24 +29,23 @@ __dbInfo__ = {"name" : "davedb",
                           "electric_conductivity DECIMAL(6,2) NOT NULL"]
               }
 
-__arduinoInfo__ = {
+arduinoInfo = {
     "serial" : '/dev/ttyACM0',
     "baud" : 9600
 }
 
 #constants
-__hasCamera__ = True
-__hasArduino__ = True
-__delay__ = 1
-
+hasCamera = True
+hasArduino = True
+delay = 1
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
-__EVs__ = [
+EVs = [
     EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
                         None),
                         #Actuator("Cirulation Fans", None, fans.off, fans.on)),
-    EnvironmentVariable("Air Temperature (C)", 12, 15, 14,
+    EnvironmentVariable("Air Temperature (C)", 12, 15, 13.5,
                         Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1), 
                         None),
                         #Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
@@ -56,7 +53,7 @@ __EVs__ = [
                         Sensor("Float Sensor", 500, getSensorValue, waterlevel), 
                         None),
                         #Actuator("Water In Pump", (lambda a : (pumpWaterIn.on(), holdActuator(a, 30))), pumpWaterIn.off, None, passActuator = (True, False, False))),
-    EnvironmentVariable("Water Temperature (C)", 10, 14, 13.2,
+    EnvironmentVariable("Water Temperature (C)", 9, 12, 10,
                         Sensor("Water Thermometer", 1000, read1Wire, wirefilesrc, 't='),
                         None),
                         #Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)),
@@ -68,6 +65,13 @@ __EVs__ = [
                         None),
 ]
 
-__Actuators__ = [
+Actuators = [
     Actuator("Lights", growLights.on, growLights.off, None)
     ]
+
+cameraInfo = {
+    "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
+    "light" : Actuators[0],
+    "resolution": (1280, 720),
+    'delta' : 1200
+}
