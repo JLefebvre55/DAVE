@@ -1,12 +1,13 @@
-#Library of all cross-DAVE functionality
-    #Finding and reading 1-Wire bus
-    #Debug console
-    #DAVE instantiation and runtime
-    #All major classes (see below)
+#General rules
+#Do delay calculation inside function being called. Let IT decide if enough time has passed (see: sensor, actutator (busy), database, camera)
+#Start all delays at delta, EXCEPT sensor reads. When DAVE boots, I want all sensor-actuator interactions to start immediately. Give the database and camera some time though.
+#format instead of +str(x)+
+#use words "is, not, in"
 
+#--IMPORTS--#
 from gpiozero import LED, Button, DigitalOutputDevice
 from time import sleep, time
-import datetime
+from datetime import datetime, time as timestamp
 import Adafruit_DHT
 import os
 import thread
@@ -15,41 +16,26 @@ import json
 from picamera import PiCamera
 import mysql.connector as mariadb
 
-#Constants
-__debugLevel__ = 1    #0-Errors, 1-Read values and Actions, 2-Device setup and read start/ends, 3-All other
-__delay__ = 0.1     #Time in s between serial sensor reads
-__setup__ = False
-
-#Variable declarations and such
-os.system('modprobe w1-gpio')    #1-W setup
-os.system('modprobe w1-therm')    #^
-
-#EMPTY LISTS - To be filled at declaration
-__EVs__ = []
-__Actuators__ = []
-__arduinoData__ = {}    #Arduino parsed JSON data
-__databaseManager__ = None
-__cameraManager__ = None
-__arduino__ = None  #arduino serial port
-
-#Oneliner functions
+secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 timems = lambda : int(time()*1000)
-pumpHoldTime = lambda mL : mL*PUMP_FLOW_CONSTANT
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
 
-#Function Definitions
-def debug(status, level):    #Replaces print
+#--FUNCTION DEFINITIONS--#
+#pass
+def debug(status, level):    #Replaces print. 0-Error, 1-Stuff you want to see all the time, 2-Genuine debugging, 3-The seventh circle of Hell
     if(level == 0):
         print("[!-ERROR-! @"+str(datetime.datetime.now().time()).split('.')[0]+"] : "+status)
     elif(level <= __debugLevel__):
         print("[DEBUG !"+str(level)+" @"+str(datetime.datetime.now().time()).split('.')[0]+"] : "+status)
 
-def formatState(state):
+#pass
+def formatState(state): #Turns raw state data into eyeball-friendly strings
     if(type(state) is float):
         return "{:.2f}".format(state)
     else:
         return str(state)
+
 
 def find1Wire(directory, prefix):
     debug("Setting up 1-Wire device with prefix '"+str(prefix)+"'...", 2)
@@ -90,15 +76,6 @@ def read1Wire(wirefile, marker):
     debug("No 1-Wire bus file initialized!", 0)
     return None    
 
-def holdActuator(actuator, time):
-    debug("Holding actuator '"+actuator.name+"' at state '"+str(actuator.trajectory)+"' for "+str(time)+"s.", 3)
-    thread.start_new_thread(_holdActuator, (actuator, time))
-    
-def _holdActuator(actuator, time):
-    actuator.busy = True
-    sleep(time)
-    actuator.busy = False
-
 def readArduinoSensor(name):
     updateArduino()
     debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
@@ -129,19 +106,20 @@ def updateArduino():
         if(type(data) is list):
             for sensor in data:
                 if "state" not in sensor.keys() or "name" not in sensor.keys():
-                    debug("Missing data in JSON from arduino!")
+                    debug("Missing data in JSON from arduino!", 0)
                     sleep(1)
                     continue
             debug("Sucessfully parsed valid JSON: "+str(data), 3)
             for sensor in data:
                 __arduinoData__[sensor["name"]] = sensor["state"]
+            break
         else:
             debug("Non-list data from arduino!", 0)
 
-#MAJOR CLASSES - Env Var holds 1 sensor and 1 actuator.
+#--ACCESSORY CLASSES--#
 
+#pass
 #Handles GPIO-EnvVar relations, as well as delays, read functionality, etc.
-#Effectively a wrapper for the read function
 class Sensor:
     def __init__(self, name, delay, func, *args):
         self.name = name
@@ -160,77 +138,93 @@ class Sensor:
         else:
             debug("Not ready to read '"+self.name+"', wait "+str(timems() - self.lastread)+"ms.", 3)
 
+#pass
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
-    def __init__(self, name, funcUp, funcDefault, funcDown, passEnvVar = (False, False, False), passActuator = (False, False, False), args0 = [], args1 = [], args2 = [], **kwargs):
+    def __init__(self, name, funcUp, funcDefault, funcDown, args0 = [], args1 = [], args2 = []):
         self.name = name
-        
+        if funcDefault is None:
+            debug("No default action for actuator '{}' is defined!".format(name), 0)
+            raise Exception
         if(funcUp == None):            #Default all outside-range operations to default (provides redundancy)
+            debug("No 'up' function defined for actuator '{}', defaulting to default".format(name), 3)
             funcUp = funcDefault
-        self.funcUp = funcUp
         if(funcDown == None):
+            debug("No 'down' function defined for actuator '{}', defaulting to default".format(name), 3)
             funcDown = funcDefault
-        self.funcDown = funcDown
-        self.funcDefault = funcDefault
+        self.func = (funcUp, funcDefault, funcDown)
         #Arg settings
-        self.passEnvVar = passEnvVar
-        self.passActuator = passActuator
         self.args = (args0, args1, args2)
         #Do default state
-        self._actuate(1)
-        self.trajectory = 1
+        self.actuate(1)
         #Will always be false unless set elsewhere
         self.busy = False
-       #handle function rerouting based on envvar state
-    def actuate(self, envvar):
+       #handle function rerouting based on envvar state 
+       
+    @classmethod
+    def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
+        me = cls(name, funcUp, funcDefault, funcDown, schedule, args0, args1, args2)
+        me.schedule = schedule
+        me.runningSchedule = False
+        return me
+    def actuate(self, index):
         if(self.busy is True):
-            debug("'"+self.name+"' is busy!", 3)
-        elif(envvar.optimal != None):
-            index = self.trajectory
-            if(envvar.current >= envvar.max):
-                debug("'"+envvar.name+"' is too high! "+str(envvar.current)+" >= "+str(envvar.max), 2)
-                index = 2
-            elif(envvar.current <= envvar.min):
-                debug("'"+envvar.name+"' is too low! "+str(envvar.current)+" <= "+str(envvar.min), 2)
-                index = 0
-            elif((self.trajectory == 2 and envvar.current <= envvar.optimal) or (self.trajectory == 0 and envvar.current >= envvar.optimal)):
-                print("'"+envvar.name+"' has reached optimal. "+str(envvar.current)+" ~ "+str(envvar.optimal)+". T:"+str(self.trajectory))
-                index = 1
-            #handle arguments to pass based on actuator settings (defaults to no args)
-            if(index != self.trajectory):
-                self.trajectory = index
-                self._actuate(index)
-            else:
-                debug(self.name+" already has trajectory "+str(self.trajectory)+"!", 3)
-            
-    def _actuate(self, index):
-        msg = ""
-        if(index == 0):
-            f = self.funcUp
-            msg += "Actuated actuator '"+self.name+"' up, passing "
-        elif(index == 2):
-            f = self.funcDown
-            msg += "Actuated actuator '"+self.name+"' down, passing "
+            debug("Actuator {} is busy!".format(self.name), 3)
+        elif(index == self.trajectory):
+            debug("Actuator {} already has trajectory {}.".format(self.name, self.trajectory), 3)
         else:
-            f = self.funcDefault
-            msg += "Actuated actuator '"+self.name+"' to default, passing "
-        #handle arguments to pass based on actuator settings (defaults to no args)
-        
-        args = []
-        
-        for a in self.args[index]:
-            args.append(a)
-        
-        if(self.passActuator[index]):
-            debug("Appended actuator to actuation args", 3)
-            args.append(self)
-        if(self.passEnvVar[index]):
-            debug("Appended envvar to actuation args", 3)
-            args.append(envvar)
-        msg+=str(len(args))+" arguments!"
-        debug(msg, 1)
-        f(*args)
+            #ALWAYS default to 1
+            if index not in (0,1,2): 
+                debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
+                index = 1
+            debug("Actuating {} {}, passing {} arguments.".format(self.name, indexToMsg(index), len(args)), 1)
+            func[index](*self.args[index])
+    def indexToMsg(self, index):
+        if index is 0: return 'up'
+        elif index is 1: return 'to default'
+        elif index is 2: return 'down'
+    #Pass
+    def autoSchedule(self):
+        if(type(self.schedule) is list):
+            for item in self.schedule:
+                if type(item) is not dict: 
+                    debug("Schedule for actuator {} subitem {} is not a list!".format(self.name, self.schedule.index(item)), 0)
+                    raise
+                    break
+                elif "index" not in item.keys():
+                    debug("Schedule for actuator {} subitem {} does not contain an actuation index!".format(self.name, self.schedule.index(item)), 0)
+                    raise
+                    break
+                elif "timestamp" not in item.keys():
+                    debug("Schedule for actuator {} subitem {} does not contain a timestamp!".format(self.name, self.schedule.index(item)), 0)
+                    raise
+                    break
+        else:
+            debug("Schedule for actuator {} is not a list!".format(self.name), 0)
+            raise
+        self.runningSchedule = True
+        thread.start_new_thread(_autoSchedule, (,))
+    def _autoSchedule(self):
+        i = 0
+        debug("Running autoscheduler for {}...".format(self.name), 1)
+        while self.runningSchedule:
+            if(datetime.now().time() > schedule[i]["timestamp"]):
+                actuator.actuate(schedule[i]["index"])
+                debug("Autoscheduler: Setting actuator {} to index {} at time {}.".format(self.name, schedule[i]["index"], schedule[i]["timestamp"]), 1)
+                #increment and bound
+                i = (i+1)%len(schedule)
+    def haltSchedule(self):
+        debug("Halting autoscheduler for {}...".format(self.name), 1)
+        self.runningSchedule = False
+    def hold(self, time):
+        debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
+        thread.start_new_thread(self._hold, (time,))
+    def _hold(self, time):
+        self.busy = True
+        sleep(time)
+        self.busy = False
 
+#pass
 #Manages the state of environment variables as reported by the sensors relative to their minimum and maximum homeostatic optima
 class EnvironmentVariable:
     def __init__(self, name, min, max, optimal, sensor, actuator):
@@ -241,15 +235,42 @@ class EnvironmentVariable:
         self.current = optimal
         self.max = max
         self.optimal = optimal
-        self.update()
+        self.current = sensor.read()
+        
+    @classmethod
+    def noActuator(cls, name, min, max, optimal, sensor, tolerance):
+        me = cls(name, min, max, optimal, sensor, None)
+        me.tolerance = tolerance
+        return me
+    #Enacts all steps of the Sense,Plan,Act model
     def update(self):
-        if(self.sensor != None):
+        if(__setup__):
+            
+            #Sense
             temp = self.sensor.read()
             if(temp != None):
                 self.current = temp
             else:
                 debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
+            
+            #Plan
+            if(self.current >= self.max):
+                debug("'"+envvar.name+"' is too high! "+str(self.current)+" >= "+str(self.max), 2)
+                index = 2
+            elif(self.current <= self.min):
+                debug("'"+self.name+"' is too low! "+str(self.current)+" <= "+str(self.min), 2)
+                index = 0
+            if is None:
+                if(abs(self.current-self.optimal) < )
+            else:
+                if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
+                    print("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory))
+                    index = 1
+            #Act
+            self.actuator.actuate(index)
 
+#pass
+#Manages database interactions, and collects and packages all sensor data into a single SQL row-insertion command
 class DBManager:
     def __init__(self, settings):
         self.settings = settings
@@ -258,7 +279,7 @@ class DBManager:
             debug("Creating database manager...", 3)
             self.database = mariadb.connect(host = settings["host"], user=settings["user"], password=settings["password"], database=settings["name"])
         except mariadb.Error as error:
-            print("[ERR]: Error creating database manager; '{}'".format(error))
+            debug("Error connecting to database: '{}'".format(error), 0)
         self.cursor = self.database.cursor()
         self.setupTables()
         debug("Database manager created!", 3)
@@ -273,30 +294,42 @@ class DBManager:
         command+=self.settings["columns"][-1]
         debug("- "+self.settings["columns"][-1], 2)
         command+=");"   #terminator
-        self.execute(command)
-        debug("DB tables set up successfully.", 2)
+        try:
+            self.execute(command)
+        except mariadb.Error as error:
+            debug("Error setting up/creating data table: '{}'".format(error), 0)
+        else:
+            debug("DB tables set up successfully.", 2)
     def sendSensorData(self, evs):
-        debug("Collecting all current sensor data...", 3)
-        command = "INSERT INTO sensordata ("
-        for col in self.settings["columns"][1:-1]:
-            command+=col.split(" ")[0]+","
-        command+=(self.settings["columns"][-1]).split(" ")[0]
-        command += ") VALUES (\""+str(datetime.datetime.now()).split(".")[0]+"\","
-        for sensor in evs[:-1]:
-            command+= str(sensor.current)+","
-            debug("- "+str(sensor.name)+" ("+formatState(sensor.current)+")", 3)
-        command += str(evs[-1].current)+");"
-        debug("- "+str(evs[-1].name)+" ("+formatState(evs[-1].current)+")", 3)
-        debug("Sending all current sensor data to database!", 1)
-        self.execute(command)
-        self.lastUpdate = time()
+        if(time() - self.lastUpdate > self.delta)
+            debug("Collecting all current sensor data...", 3)
+            
+            command = "INSERT INTO sensordata ("
+            for col in self.settings["columns"][1:-1]:
+                command+=col.split(" ")[0]+","
+            command+=(self.settings["columns"][-1]).split(" ")[0]
+            
+            command += ") VALUES (\""+str(datetime.datetime.now()).split(".")[0]+"\","
+            for sensor in evs[:-1]:
+                command+= str(sensor.current)+","
+                debug("- "+str(sensor.name)+" ("+formatState(sensor.current)+")", 3)
+            command += str(evs[-1].current)+");"
+            debug("- "+str(evs[-1].name)+" ("+formatState(evs[-1].current)+")", 3)
+            
+            try:
+                self.execute(command)
+            except mariadb.Error as error:
+                debug("Error sending data to data table: {}".format(error))
+            else:
+                debug("Current sensor data successfully sent to database!", 1)
+                
+            self.lastUpdate = time()
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
-        try:
-            self.cursor.execute(command)
-        except mariadb.Error as e:
-            debug("MySQL Error: '"+str(e)+"'", 0)
+        self.cursor.execute(command)
 
+#pass
+#Manages camera interactions (taking photos and the like)
 class CameraManager:
     def __init__(self, settings):
         debug("Creating camera manager...", 1)
@@ -307,120 +340,128 @@ class CameraManager:
             settings["path"].append('/')
         self.path = settings["path"]
         self.delta = settings['delta']
-        self.lastCapture = time()
+        self.lastCapture = 0
     def capture(self):
-        if(self.light != None):
-            self.light._actuate(0)
-            self._capture()
-            self.light._actuate(1)
-        else:
-            self._capture()
-        self.lastCapture = time()
+        if(time() - self.lastCapture > self.delta):
+            if(self.light != None):
+                self.light.actuate(0)
+                self._capture()
+                self.light.actuate(1)
+            else:
+                self._capture()
+            self.lastCapture = time()
     def _capture(self):
         debug("Capturing an image!", 1)
         self.camera.start_preview()
         sleep(3)
-        self.camera.capture(self.formatPath())
-        self.camera.stop_preview()
+        try:
+            self.camera.capture(self.formatPath())
+        except Error as e:
+            debug("Error capturing photo: {}".format(e), 0)
+        finally:
+            self.camera.stop_preview()
     def formatPath(self):
         return '{0}dave_{1}.jpg'.format(self.path, str(datetime.datetime.now()).split(".")[0].replace(' ','_'))
 
-def setup(evs = [], actuators = [], debug = 0, delay = 0.1, arduino = None, db = None, cam = None, **kwargs):
-    print("Performing first time DAVE setup...")
-    global __debugLevel__, __EVs__, __Actuators__, __delay__, __setup__, __databaseManager__, __arduino__, __cameraManager__
-    __debugLevel__ = debug
-    __delay__ = delay
-    __EVs__ = evs
-    __Actuators__ = actuators
-    if(arduino != None):
-        __arduino__ = serial.Serial(arduino["serial"], arduino["baud"])
-        updateArduino()
-    if(db!=None):
-        __databaseManager__ = DBManager(db)
-    if(cam != None):
-        __cameraManager__ = CameraManager(cam)
-    __setup__ = True
-    
-def run():
-    if(__setup__):
-        ("Welcome to the DAVE Homeostasis Engine!") 
+  
+#--MAIN CLASS--#
+
+#pass
+class DAVE:
+    __init__(self, evs, actuators, debug, delay, ard, db, cam):
+        self.evs = evs
+        self.scheduledActuators = actuators
+        self.debugLevel = debug
+        self.delay = delay
+        
+        debug("Performing setup...", 1)
+        if ard is not None:
+            self.arduino = ArduinoManager(ard)
+        else:
+            debug("No arduino settings given! No arduino activity will occur.", 0)
+            
+        if db is not None: 
+            self.database = DatabaseManager(db)
+        else:
+            debug("No database settings given! No database activity will occur.", 0)
+            
+        if cam is not None:
+            self.camera = CameraManager(cam)
+        else:
+            debug("No camera settings given! No camera activity will occur.", 0)
+            
+    def run(self):
+        print("Welcome to the DAVE Runtime Environment! Optimal homeostasis will now be generated.") 
+        for actuator in self.scheduledActuators:
+            actuator.autoSchedule()
         while True:
-            for ev in __EVs__:
+            for ev in self.evs:
                 ev.update()    #Sense
-                if(ev.actuator != None):
-                    ev.actuator.actuate(ev) #Plan, Act
                 if(ev.sensor != None):
                     print(ev.name+": "+formatState(ev.current))
-                sleep(__delay__)
-            if(time() - __databaseManager__.lastUpdate > __databaseManager__.delta):
-                __databaseManager__.sendSensorData(__EVs__)
-            if(time() - __cameraManager__.lastCapture > __cameraManager__.delta):
-                __cameraManager__.capture()
-                    
-    else:
-        print("[ERR]: Setup has not yet been performed!")
-            
-def interface():
-    if(__setup__):
-        print("Welcome to the DAVE manual interface!\n")
-        while True:
-            x=-1
-            while x < 0 or x > 6:
-                print("What to do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Take a photo\n6: Quit")
-                x = int(input())
-            
-            if(x == 1):
-                print("Choose an environment variable:")
-                i=-1
-                while i < 0 or i > len(__EVs__):
-                    i = 1
-                    for sensor in __EVs__:
-                        print(str(i)+": "+sensor.name)
-                        i+=1
-                    i = int(input())
-                __EVs__[i-1].update()
-                print("Attached sensor: "+__EVs__[i-1].sensor.name)
-                print("State: "+str(__EVs__[i-1].current))
-                    
-            elif(x == 2):
-                print("Choose an actuator:")
-                #Create compound list of EVs with actuators as well as standalone actuators
-                newList = __Actuators__[:]
-                for ev in __EVs__:
-                    if ev.actuator != None:
-                        newList.append(ev.actuator)
-                i = -1
-                while i < 0 or i > len(newList):
-                    i = 1
-                    for actuator in newList:
-                        print(str(i)+": "+actuator.name)
-                        i+=1
-                    i = int(input())
-                actuator = newList[i-1]
-                if(actuator.busy):
-                    print("Actuator is busy.")
-                else:
-                    print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
-                    c = int(input())
-                    actuator._actuate(c-1)
-            elif(x == 6):
-                break
-            elif(x == 5):
-                __cameraManager__.capture()
-                print("Captured!")
-            elif(x==4):
-                __databaseManager__.sendSensorData(__EVs__)
-            elif(x == 3):
-                try:
-                    __databaseManager__.cursor.execute("SELECT * FROM sensordata")
-                    result = __databaseManager__.cursor.fetchall()[-1]
-                    print(result)
-                except mariadb.Error as error:
-                    print("[ERR]: {}".format(error))
-                except IndexError as error:
-                    print("[ERR]: Table has no rows!")
-        print("Goodbye!")
-        sleep(1)
-    else:
-        print("[ERR]: Setup has not yet been performed!")
-        
+                sleep(self.delay)
+            self.database.sendSensorData(self.evs)
+            self.camera.capture()
+    def interface():
+        if(__setup__):
+            print("Welcome to the DAVE Manual Control Interface!\n")
+            while True:
+                x=-1
+                while x < 0 or x > 6:
+                    print("\nWhat would you like do?\n1: Read variable\n2: Actuate\n3: Read latest from MySQL database\n4: Write current to MySQL database\n5: Take a photo\n6: Quit")
+                    x = int(input())
+                
+                if(x == 1):
+                    print("Choose an environment variable:")
+                    i=-1
+                    while i < 0 or i > len(self.evs):
+                        i = 1
+                        for sensor in self.evs:
+                            print(str(i)+": "+sensor.name)
+                            i+=1
+                        i = int(input())
+                    self.evs[i-1].update()
+                    print("Attached sensor: "+self.evs[i-1].sensor.name)
+                    print("State: "+str(self.evs[i-1].current))
+                        
+                elif(x == 2):
+                    print("Choose an actuator:")
+                    #Create compound list of EVs with actuators as well as standalone actuators
+                    newList = self.scheduledActuators[:]
+                    for ev in self.evs:
+                        if ev.actuator != None:
+                            newList.append(ev.actuator)
+                    i = -1
+                    while i < 0 or i > len(newList):
+                        i = 1
+                        for actuator in newList:
+                            print(str(i)+": "+actuator.name)
+                            i+=1
+                        i = int(input())
+                    actuator = newList[i-1]
+                    if(actuator.busy):
+                        print("Actuator is busy.")
+                    else:
+                        print("Actuate trajectory:\n1. Up\n2. Default\n3. Down")
+                        c = int(input())
+                        actuator.actuate(c-1)
+                elif(x == 6):
+                    break
+                elif(x == 5):
+                    self.camera.capture()
+                    print("Captured!")
+                elif(x==4):
+                    self.database.sendSensorData(self.evs)
+                elif(x == 3):
+                    try:
+                        self.database.cursor.execute("SELECT * FROM sensordata")
+                        result = self.database.cursor.fetchall()[-1]
+                        print(result)
+                    except mariadb.Error as error:
+                        debug("MySQL error: {}".format(error), 0)
+                    except IndexError as error:
+                        debug("Table has no rows!", 0)
+            print("Goodbye!")
+            sleep(1)
+        else:
+            print("[ERR]: Setup has not yet been performed!")
