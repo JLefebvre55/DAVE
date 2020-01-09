@@ -203,7 +203,7 @@ class Actuator:
             debug("Schedule for actuator {} is not a list!".format(self.name), 0)
             raise
         self.runningSchedule = True
-        thread.start_new_thread(_autoSchedule, (,))
+        thread.start_new_thread(_autoSchedule, ())
     def _autoSchedule(self):
         i = 0
         debug("Running autoscheduler for {}...".format(self.name), 1)
@@ -231,6 +231,9 @@ class EnvironmentVariable:
         self.name = name
         self.min = min
         self.sensor = sensor
+        if(actuator is None):
+            debug("Attached actuator should not be none. Please use EnvironmentVariable.noActuator() classmethod.")
+            raise
         self.actuator = actuator
         self.current = optimal
         self.max = max
@@ -260,8 +263,8 @@ class EnvironmentVariable:
             elif(self.current <= self.min):
                 debug("'"+self.name+"' is too low! "+str(self.current)+" <= "+str(self.min), 2)
                 index = 0
-            if is None:
-                if(abs(self.current-self.optimal) < )
+            if self.actuator is None: #then must be a 
+                if(abs(self.current-self.optimal) < self.tolerance)
             else:
                 if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
                     print("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory))
