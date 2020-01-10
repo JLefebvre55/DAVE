@@ -225,6 +225,7 @@ class Actuator:
                 debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
                 index = 1
             debug("Actuating {} {}.".format(self.name, self.indexToMsg(index)), 1)
+            self.trajectory = index
             self.func[index](*self.args[index])
     def indexToMsg(self, index):
         if index is 0: return 'up'
