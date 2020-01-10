@@ -18,7 +18,6 @@ var server = http.createServer(app).listen(port, function(){
 });
 
 var socketlistener = socket.listen(server);
-var database = mysql();
 const NUMROWS = 10
 
 //File GETs
