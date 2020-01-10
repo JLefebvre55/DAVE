@@ -1,7 +1,7 @@
 
 #include "VernierLib.h" 
-#define A2SLOPE -3.838
-#define A2INTERCEPT 13.720                                         
+#define A2SLOPE -3.75947
+#define A2INTERCEPT 13.1706                                         
 
 VernierLib Vernier;
 void setup()

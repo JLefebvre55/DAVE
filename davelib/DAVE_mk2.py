@@ -71,9 +71,7 @@ acts = [
     Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
                        [
                            {"index" : 0, "timestamp" : timestamp(8)},
-                           {"index" : 2, "timestamp" : timestamp(16)},
-                           {"index" : 0, "timestamp" : timestamp(20, 25)},
-                           {"index" : 2, "timestamp" : timestamp(20, 26)}
+                           {"index" : 2, "timestamp" : timestamp(16)}}
                         ]
                        )
     ]

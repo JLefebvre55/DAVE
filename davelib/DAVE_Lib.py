@@ -183,6 +183,7 @@ class Actuator:
     def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
+        me.scheduleIndex = len(schedule)-1
         if(type(schedule) is list):
             for item in schedule:
                 if type(item) is not dict: 
@@ -201,7 +202,7 @@ class Actuator:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
         for item in schedule:
-            if datetime.now().time() > item["timestamp"]:
+            if datetime.now().time() < item["timestamp"]:
                 debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
                 me.scheduleIndex = schedule.index(item)
                 break
@@ -224,7 +225,7 @@ class Actuator:
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
     def checkSchedule(self):
-        if(self.scheduleIndex < len(self.schedule)-1):  #We haven't reached the last schedule item
+        if(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
             debug("Checking schedule for {}...".format(self.name), 3)
             if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
                 self.actuate(self.schedule[self.scheduleIndex]["index"])
@@ -235,7 +236,7 @@ class Actuator:
             debug("Scheduler: Day rollover! Resetting {} schedule.".format(self.name), 1)
             self.scheduleIndex = 0
         else:#We have reached the last item, but the day has not passed; ergo do nothing
-            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 3)
+            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 1)
             
     def hold(self, time):
         debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
