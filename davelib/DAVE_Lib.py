@@ -183,7 +183,6 @@ class Actuator:
     def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
-        me.scheduleIndex = 0
         if(type(schedule) is list):
             for item in schedule:
                 if type(item) is not dict: 
@@ -201,6 +200,12 @@ class Actuator:
         else:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
+        for item in schedule:
+            if datetime.now().time() > item["timestamp"]:
+                debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
+                me.scheduleIndex = schedule.index(item)
+                break
+        me.scheduleLastDate = datetime.now().date()
         return me
     def actuate(self, index):
         if(self.busy is True):
@@ -219,13 +224,18 @@ class Actuator:
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
     def checkSchedule(self):
-        debug("Checking schedule for {}...".format(self.name), 3)
-        
-        if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
-            self.actuate(self.schedule[self.scheduleIndex]["index"])
-            debug("Scheduler: Setting actuator {} to index {} at time {} (past {}).".format(self.name, self.schedule[self.scheduleIndex]["index"], datetime.now().time(), self.schedule[self.scheduleIndex]["timestamp"]), 1)
-            #increment and bound
-            self.scheduleIndex = (self.scheduleIndex+1)%len(self.schedule)
+        if(self.scheduleIndex < len(self.schedule)-1):  #We haven't reached the last schedule item
+            debug("Checking schedule for {}...".format(self.name), 3)
+            if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
+                self.actuate(self.schedule[self.scheduleIndex]["index"])
+                debug("Scheduler: Setting actuator {} to index {} at time {} (past {}).".format(self.name, self.schedule[self.scheduleIndex]["index"], datetime.now().time(), self.schedule[self.scheduleIndex]["timestamp"]), 1)
+                #increment and bound
+                self.scheduleIndex +=1
+        elif(datetime.now().date() > self.scheduleLastDate):    #We have reached the last schedule item, and the day has passed
+            debug("Scheduler: Day rollover! Resetting {} schedule.".format(self.name), 1)
+            self.scheduleIndex = 0
+        else:#We have reached the last item, but the day has not passed; ergo do nothing
+            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 3)
             
     def hold(self, time):
         debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
