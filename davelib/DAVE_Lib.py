@@ -17,9 +17,9 @@ from picamera import PiCamera
 import mysql.connector as mariadb
 
 secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-timems = lambda : int(time()*1000)
 getSensorValue = lambda button : button.value
 separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
+timems = lambda : int(time()*1000)
 
 __debugLevel__ = 0
 __arduino__ = None
@@ -84,19 +84,25 @@ def read1Wire(wirefile, marker):
 def readArduinoSensor(name):
     if(__arduino__ is None):
         return
-    updateArduino()
-    debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
-    if name in __arduinoData__:
-        return __arduinoData__[name]
-    else:
-        debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
+    while True:
+        updateArduino()
+        debug("Fetching Arduino sensor '"+name+"' from data table.", 3)
+        if name in __arduinoData__:
+            if(__arduinoData__[name] is None):
+                continue
+            else: return __arduinoData__[name] 
+        else:
+            debug("Attempted to fetch unknown Arduino sensor '"+name+"' from data table.", 0)
 
 #pass
 def updateArduino():
     debug("Updating Arduino data table", 2)
     #Read serial until valid data occurs
+    attempt = 0
     while True:
         #Successful read?
+        attempt+=1
+        debug("Arduino read attempt {}".format(attempt), 3)
         try:
             line = __arduino__.readline()[:-1]
         except Exception as e:
@@ -116,7 +122,7 @@ def updateArduino():
                 if "state" not in sensor.keys() or "name" not in sensor.keys():
                     debug("Missing data in JSON from arduino!", 0)
                     sleep(1)
-                    continue
+                    return None
             debug("Sucessfully parsed valid JSON: "+str(data), 3)
             for sensor in data:
                 __arduinoData__[sensor["name"]] = sensor["state"]
@@ -140,6 +146,10 @@ class Sensor:
         if(timems() - self.lastread >= self.delay):
             debug("Reading sensor '"+self.name+"'...", 2)
             temp = self.func(*self.args)
+            if temp is None: 
+                debug("Sensor {} read as None; is this supposed to happen?".format(self.name), 0)
+
+            
             self.lastread = timems()
             debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
@@ -173,7 +183,30 @@ class Actuator:
     def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
-        me.runningSchedule = False
+        me.scheduleIndex = len(schedule)-1
+        if(type(schedule) is list):
+            for item in schedule:
+                if type(item) is not dict: 
+                    debug("Schedule for actuator {} subitem {} is not a list!".format(name, schedule.index(item)), 0)
+                    raise
+                    break
+                elif "index" not in item.keys():
+                    debug("Schedule for actuator {} subitem {} does not contain an actuation index!".format(name, schedule.index(item)), 0)
+                    raise
+                    break
+                elif "timestamp" not in item.keys():
+                    debug("Schedule for actuator {} subitem {} does not contain a timestamp!".format(name, schedule.index(item)), 0)
+                    raise
+                    break
+        else:
+            debug("Schedule for actuator {} is not a list!".format(name), 0)
+            raise
+        for item in schedule:
+            if datetime.now().time() < item["timestamp"]:
+                debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
+                me.scheduleIndex = schedule.index(item)
+                break
+        me.scheduleLastDate = datetime.now().date()
         return me
     def actuate(self, index):
         if(self.busy is True):
@@ -191,40 +224,20 @@ class Actuator:
         if index is 0: return 'up'
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
-    #Pass
-    def autoSchedule(self):
-        if(type(self.schedule) is list):
-            for item in self.schedule:
-                if type(item) is not dict: 
-                    debug("Schedule for actuator {} subitem {} is not a list!".format(self.name, self.schedule.index(item)), 0)
-                    raise
-                    break
-                elif "index" not in item.keys():
-                    debug("Schedule for actuator {} subitem {} does not contain an actuation index!".format(self.name, self.schedule.index(item)), 0)
-                    raise
-                    break
-                elif "timestamp" not in item.keys():
-                    debug("Schedule for actuator {} subitem {} does not contain a timestamp!".format(self.name, self.schedule.index(item)), 0)
-                    raise
-                    break
-        else:
-            debug("Schedule for actuator {} is not a list!".format(self.name), 0)
-            raise
-        self.runningSchedule = True
-        thread.start_new_thread(self._autoSchedule, ())
-    def _autoSchedule(self):
-        i = 0
-        debug("Running autoscheduler for {}...".format(self.name), 1)
-        while self.runningSchedule:
-            if(datetime.now().time() > self.schedule[i]["timestamp"]):
-                actuator.actuate(self.schedule[i]["index"])
-                debug("Autoscheduler: Setting actuator {} to index {} at time {}.".format(self.name, self.schedule[i]["index"], self.schedule[i]["timestamp"]), 1)
+    def checkSchedule(self):
+        if(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
+            debug("Checking schedule for {}...".format(self.name), 3)
+            if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
+                self.actuate(self.schedule[self.scheduleIndex]["index"])
+                debug("Scheduler: Setting actuator {} to index {} at time {} (past {}).".format(self.name, self.schedule[self.scheduleIndex]["index"], datetime.now().time(), self.schedule[self.scheduleIndex]["timestamp"]), 1)
                 #increment and bound
-                i = (i+1)%len(self.schedule)
-            sleep(60)
-    def haltSchedule(self):
-        debug("Halting autoscheduler for {}...".format(self.name), 1)
-        self.runningSchedule = False
+                self.scheduleIndex +=1
+        elif(datetime.now().date() > self.scheduleLastDate):    #We have reached the last schedule item, and the day has passed
+            debug("Scheduler: Day rollover! Resetting {} schedule.".format(self.name), 1)
+            self.scheduleIndex = 0
+        else:#We have reached the last item, but the day has not passed; ergo do nothing
+            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 1)
+            
     def hold(self, time):
         debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
         thread.start_new_thread(self._hold, (time,))
@@ -254,8 +267,9 @@ class EnvironmentVariable:
     #Enacts all steps of the Sense,Plan,Act model
     def update(self):
         #Sense
-        self.read()
-        
+        temp = self.read()
+        if temp is not None: self.current = temp
+        index = 1
         #Plan
         if(self.current >= self.max):
             debug("'"+self.name+"' is too high! "+str(self.current)+" >= "+str(self.max), 2)
@@ -266,13 +280,12 @@ class EnvironmentVariable:
         if self.actuator is None: #then must be a 
             if(abs(self.current-self.optimal) < self.tolerance):
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".", 2)
-        else:
-            if((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
+            return
+        elif((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory), 2)
                 index = 1
         #Act
-        if(self.actuator is not None):
-            self.actuator.actuate(index)
+        self.actuator.actuate(index)
     def read(self):
         temp = self.sensor.read()
         if(temp != None):
@@ -353,7 +366,7 @@ class CameraManager:
         self.lastCapture = 0
     def capture(self):
         if(time() - self.lastCapture > self.delta):
-            if(self.light != None):
+            if(self.light is not None and self.light.trajectory is not 0):
                 self.light.actuate(0)
                 self._capture()
                 self.light.actuate(1)
@@ -404,14 +417,14 @@ class DAVE:
             
     def run(self):
         print("Welcome to the DAVE Runtime Environment! Optimal homeostasis will now be generated.") 
-        for actuator in self.scheduledActuators:
-            actuator.autoSchedule()
         while True:
             for ev in self.evs:
                 ev.update()    #Sense, Plan, Act
                 if(ev.sensor != None):
                     print(ev.name+": "+formatState(ev.current))
                 sleep(self.delay)
+            for actuator in self.scheduledActuators:
+                actuator.checkSchedule()
             self.database.sendSensorData(self.evs)
             self.camera.capture()
     def interface(self):

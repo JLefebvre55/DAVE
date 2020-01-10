@@ -59,10 +59,10 @@ evs = [
                         2),
                         #Actuator("Water Pump/Cooler", None, waterCooler.off, waterCooler.on)),
     EnvironmentVariable.noActuator("pH", 5.5, 6.0, 6.5,
-                        Sensor("Arduino-pH Sensor", 4000, readArduinoSensor, "pH"),
+                        Sensor("Arduino-pH Sensor", 500, readArduinoSensor, "pH"),
                         0.3),
     EnvironmentVariable.noActuator("Eletrical Conductivity", 1000, 1250, 1500,
-                        Sensor("Arduino-EC Sensor", 4000, readArduinoSensor, "EC"),
+                        Sensor("Arduino-EC Sensor", 500, readArduinoSensor, "EC"),
                         250),
 ]
 
@@ -70,8 +70,8 @@ evs = [
 acts = [
     Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
                        [
-                           {"index" : 2, "timestamp" : timestamp(8)},
-                           {"index" : 0, "timestamp" : timestamp(16)}
+                           {"index" : 0, "timestamp" : timestamp(8)},
+                           {"index" : 2, "timestamp" : timestamp(16)}}
                         ]
                        )
     ]
