@@ -43,11 +43,11 @@ delay = 1
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
 evs = [
     EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
-                        Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
+                        Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0, 0, 100), 
                         Actuator("Exhaust Fans", None, fans.off, fans.on)),
                         #Actuator("Cirulation Fans", None, fans.off, fans.on)),
     EnvironmentVariable.noActuator("Air Temperature (C)", 12, 15, 13.5,
-                        Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1), 
+                        Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1, -40, 40), 
                         2),
                         #Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
     EnvironmentVariable.noActuator("Water Level (1Hi, 0Lo)", 0, 1, 1,

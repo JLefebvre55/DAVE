@@ -4,6 +4,8 @@
 #format instead of +str(x)+
 #use words "is, not, in"
 
+#note - 
+
 #--IMPORTS--#
 from gpiozero import LED, Button, DigitalOutputDevice
 from time import sleep, time
@@ -18,7 +20,11 @@ import mysql.connector as mariadb
 
 secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 getSensorValue = lambda button : button.value
-separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
+def separateReadDHT(a,b,c,d,e):
+    temp = Adafruit_DHT.read_retry(a, b)[c]
+    if temp < d or temp > e:
+        return None
+    else: return temp
 timems = lambda : int(time()*1000)
 
 __debugLevel__ = 0
@@ -267,8 +273,7 @@ class EnvironmentVariable:
     #Enacts all steps of the Sense,Plan,Act model
     def update(self):
         #Sense
-        temp = self.read()
-        if temp is not None: self.current = temp
+        self.read()
         index = 1
         #Plan
         if(self.current >= self.max):
@@ -290,8 +295,6 @@ class EnvironmentVariable:
         temp = self.sensor.read()
         if(temp != None):
             self.current = temp
-        else:
-            debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
 #pass
 #Manages database interactions, and collects and packages all sensor data into a single SQL row-insertion command
 class DBManager:
