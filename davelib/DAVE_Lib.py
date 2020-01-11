@@ -4,6 +4,8 @@
 #format instead of +str(x)+
 #use words "is, not, in"
 
+#note - 
+
 #--IMPORTS--#
 from gpiozero import LED, Button, DigitalOutputDevice
 from time import sleep, time
@@ -16,12 +18,17 @@ import json
 from picamera import PiCamera
 import mysql.connector as mariadb
 
-secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 getSensorValue = lambda button : button.value
-separateReadDHT = lambda a, b, c : Adafruit_DHT.read_retry(a, b)[c]
+def separateReadDHT(a,b,c,d,e):
+    temp = Adafruit_DHT.read_retry(a, b)[c]
+    if temp < d or temp > e:
+        name = 'air humidity' if c is 0 else 'air temperature' 
+        debug("Caught {} value range error (was {})".format(name, temp), 0)
+        return None
+    else: return temp
 timems = lambda : int(time()*1000)
 
-__debugLevel__ = 0
+__debugLevel__ = 3
 __arduino__ = None
 __arduinoData__ = {}
 
@@ -183,8 +190,11 @@ class Actuator:
     def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
-        me.scheduleIndex = len(schedule)-1
-        if(type(schedule) is list):
+        if schedule is None:
+            debug("No schedule given for scheduled actuator {}. No error.".format(name), 3)
+            return me
+        elif(type(schedule) is list):
+            me.scheduleIndex = len(schedule)-1
             for item in schedule:
                 if type(item) is not dict: 
                     debug("Schedule for actuator {} subitem {} is not a list!".format(name, schedule.index(item)), 0)
@@ -219,7 +229,8 @@ class Actuator:
             if index not in (0,1,2): 
                 debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
                 index = 1
-            debug("Actuating {} {}.".format(self.name, self.indexToMsg(index)), 1)
+            debug("Actuating {} {}.".format(self.name, Actuator.indexToMsg(index)), 1)
+            self.trajectory = index
             self.func[index](*self.args[index])
     @staticmethod
     def indexToMsg(index):
@@ -227,7 +238,9 @@ class Actuator:
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
     def checkSchedule(self):
-        if(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
+        if(self.schedule is None):
+            return
+        elif(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
             debug("Checking schedule for {}...".format(self.name), 3)
             if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
                 self.actuate(self.schedule[self.scheduleIndex]["index"])
@@ -269,8 +282,7 @@ class EnvironmentVariable:
     #Enacts all steps of the Sense,Plan,Act model
     def update(self):
         #Sense
-        temp = self.read()
-        if temp is not None: self.current = temp
+        self.read()
         index = 1
         #Plan
         if(self.current >= self.max):
@@ -284,7 +296,7 @@ class EnvironmentVariable:
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".", 2)
             return
         elif((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
-                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory), 2)
+                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.actuator.trajectory), 2)
                 index = 1
         #Act
         self.actuator.actuate(index)
@@ -292,8 +304,6 @@ class EnvironmentVariable:
         temp = self.sensor.read()
         if(temp != None):
             self.current = temp
-        else:
-            debug("'"+self.sensor.name+"' read as None, is this supposed to happen?", 0)
 #pass
 #Manages database interactions, and collects and packages all sensor data into a single SQL row-insertion command
 class DBManager:
@@ -359,6 +369,7 @@ class CameraManager:
     def __init__(self, settings):
         debug("Creating camera manager...", 1)
         self.light = settings['light']
+        self.otherLights = settings["otherLights"]
         self.camera = PiCamera()
         self.camera.resolution = settings["resolution"]
         if settings["path"][-1] is not '/':
@@ -368,23 +379,30 @@ class CameraManager:
         self.lastCapture = 0
     def capture(self):
         if(time() - self.lastCapture > self.delta):
-            if(self.light is not None and self.light.trajectory is not 0):
+            if(self.light is not None):
+                temp1 = self.light.trajectory
                 self.light.actuate(0)
-                self._capture()
-                self.light.actuate(1)
-            else:
-                self._capture()
-            self.lastCapture = time()
-    def _capture(self):
-        debug("Capturing an image!", 1)
-        self.camera.start_preview()
-        sleep(3)
-        try:
-            self.camera.capture(self.formatPath())
-        except Error as e:
-            debug("Error capturing photo: {}".format(e), 0)
-        finally:
-            self.camera.stop_preview()
+            if self.otherLights is not None:
+                temp2 = []
+                for light in self.otherLights:
+                    temp2.append(light.trajectory)
+                    light.actuate(2)
+                    
+            debug("Capturing an image!", 1)
+            self.camera.start_preview() 
+            sleep(3)
+            try:
+                self.camera.capture(self.formatPath())
+            except Error as e:
+                debug("Error capturing photo: {}".format(e), 0)
+            finally:
+                self.camera.stop_preview()
+                self.lastCapture = time()
+            if self.light is not None:
+                self.light.actuate(temp1)
+            if self.otherLights is not None:
+                for light in self.otherLights:
+                    light.actuate(temp2[self.otherLights.index(light)])
     def formatPath(self):
         return '{0}dave_{1}.jpg'.format(self.path, str(datetime.now()).split(".")[0].replace(' ','_'))
   

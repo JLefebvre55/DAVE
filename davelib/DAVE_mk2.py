@@ -6,8 +6,11 @@ from DAVE_Lib import *
 waterlevel = Button(17)
 
 #Output Pins
-growLights = DigitalOutputDevice(6)
+whiteLights = DigitalOutputDevice(6)
+redLights = DigitalOutputDevice(18)
+blueLights = DigitalOutputDevice(23)
 fans = DigitalOutputDevice(22)
+airCooler = DigitalOutputDevice(27)
 
 #1-Wire setup
 os.system('modprobe w1-gpio')    #1-W setup
@@ -42,14 +45,12 @@ delay = 1
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
 evs = [
-    EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
-                        Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0), 
+    EnvironmentVariable("Air Humidity (%H)", 80, 95, 90,
+                        Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0, 0, 100), 
                         Actuator("Exhaust Fans", None, fans.off, fans.on)),
-                        #Actuator("Cirulation Fans", None, fans.off, fans.on)),
-    EnvironmentVariable.noActuator("Air Temperature (C)", 12, 15, 13.5,
-                        Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1), 
-                        2),
-                        #Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
+    EnvironmentVariable("Air Temperature (C)", 12, 15, 13.5,
+                        Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1, -40, 40), 
+                        Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
     EnvironmentVariable.noActuator("Water Level (1Hi, 0Lo)", 0, 1, 1,
                         Sensor("Float Sensor", 500, getSensorValue, waterlevel), 
                         0),
@@ -66,14 +67,21 @@ evs = [
                         250),
 ]
 
+#PUT IN ORDER
+growLightSchedule = [
+                           {"index" : 0, "timestamp" : timestamp(10)},
+                           {"index" : 2, "timestamp" : timestamp(16)}
+                           
+                        ]
+
 #A schedule is a list of "index"-"delta" pairs controlling an actuator. 0-up, 1-def, 2-down
 acts = [
-    Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
-                       [
-                           {"index" : 0, "timestamp" : timestamp(8)},
-                           {"index" : 2, "timestamp" : timestamp(16)}}
-                        ]
-                       )
+    Actuator.scheduled("Lights - White", whiteLights.on, whiteLights.off, None, 
+                       None),
+    Actuator.scheduled("Lights - Red", redLights.on, redLights.off, None,
+                      growLightSchedule),
+    Actuator.scheduled("Lights - Blue", blueLights.on, blueLights.off, None,
+                       growLightSchedule)
     ]
 
 
@@ -81,6 +89,7 @@ acts = [
 cam = {
     "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
     "light" : acts[0],
+    "otherLights" : acts[1:],
     "resolution": (1280, 720),
     'delta' : 1200
 }
