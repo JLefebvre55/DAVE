@@ -362,6 +362,7 @@ class DBManager:
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
         self.cursor.execute(command)
+        self.database.commit()
 
 #pass
 #Manages camera interactions (taking photos and the like)
