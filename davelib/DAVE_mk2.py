@@ -9,8 +9,8 @@ waterlevel = Button(17)
 whiteLights = DigitalOutputDevice(6)
 redLights = DigitalOutputDevice(18)
 blueLights = DigitalOutputDevice(23)
-airCooler = DigitalOutputDevice(27)
 fans = DigitalOutputDevice(22)
+airCooler = DigitalOutputDevice(27)
 
 #1-Wire setup
 os.system('modprobe w1-gpio')    #1-W setup
@@ -45,7 +45,7 @@ delay = 1
 
 #ENSURE EVS ARE IN SAME ORDER AS DATABASE
 evs = [
-    EnvironmentVariable("Air Humidity (%H)", 60, 80, 70,
+    EnvironmentVariable("Air Humidity (%H)", 80, 95, 90,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0, 0, 100), 
                         Actuator("Exhaust Fans", None, fans.off, fans.on)),
     EnvironmentVariable("Air Temperature (C)", 12, 15, 13.5,
@@ -67,11 +67,11 @@ evs = [
                         250),
 ]
 
+#PUT IN ORDER
 growLightSchedule = [
-                           {"index" : 0, "timestamp" : timestamp(8)},
-                           {"index" : 2, "timestamp" : timestamp(16)},
-                           {"index" : 0, "timestamp" : timestamp(2,30)},
-                           {"index" : 2, "timestamp" : timestamp(3)}
+                           {"index" : 0, "timestamp" : timestamp(10)},
+                           {"index" : 2, "timestamp" : timestamp(16)}
+                           
                         ]
 
 #A schedule is a list of "index"-"delta" pairs controlling an actuator. 0-up, 1-def, 2-down

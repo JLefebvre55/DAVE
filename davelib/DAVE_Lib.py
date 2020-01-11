@@ -191,6 +191,7 @@ class Actuator:
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
         if schedule is None:
+            debug("No schedule given for scheduled actuator {}. No error.".format(name), 3)
             return me
         elif(type(schedule) is list):
             me.scheduleIndex = len(schedule)-1
@@ -210,12 +211,15 @@ class Actuator:
         else:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
+
         me.scheduleIndex = 0
         for item in schedule:
             if datetime.now().time() < item["timestamp"]:
-                debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
+                print("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]))
                 me.scheduleIndex = schedule.index(item)
                 break
+            else:
+                debug("Skipping item {} in schedule for {} ({} > {})", 3)
         me.scheduleLastDate = datetime.now().date()
         return me
     def actuate(self, index):
