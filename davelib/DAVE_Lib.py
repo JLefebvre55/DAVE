@@ -18,11 +18,12 @@ import json
 from picamera import PiCamera
 import mysql.connector as mariadb
 
-secondsSinceMidnight = lambda : (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 getSensorValue = lambda button : button.value
 def separateReadDHT(a,b,c,d,e):
     temp = Adafruit_DHT.read_retry(a, b)[c]
     if temp < d or temp > e:
+        name = 'air humidity' if c is 0 else 'air temperature' 
+        debug("Caught {} value range error (was {})".format(name, temp), 0)
         return None
     else: return temp
 timems = lambda : int(time()*1000)
@@ -189,8 +190,10 @@ class Actuator:
     def scheduled(cls, name, funcUp, funcDefault, funcDown, schedule, args0=[], args1=[], args2=[]):
         me = cls(name, funcUp, funcDefault, funcDown, args0, args1, args2)
         me.schedule = schedule
-        me.scheduleIndex = len(schedule)-1
-        if(type(schedule) is list):
+        if schedule is None:
+            return me
+        elif(type(schedule) is list):
+            me.scheduleIndex = len(schedule)-1
             for item in schedule:
                 if type(item) is not dict: 
                     debug("Schedule for actuator {} subitem {} is not a list!".format(name, schedule.index(item)), 0)
@@ -207,6 +210,7 @@ class Actuator:
         else:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
+        me.scheduleIndex = 0
         for item in schedule:
             if datetime.now().time() < item["timestamp"]:
                 debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
@@ -232,7 +236,9 @@ class Actuator:
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
     def checkSchedule(self):
-        if(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
+        if(self.schedule is None):
+            return
+        elif(self.scheduleIndex <= len(self.schedule)-1):  #We haven't reached the last schedule item
             debug("Checking schedule for {}...".format(self.name), 3)
             if(datetime.now().time() > self.schedule[self.scheduleIndex]["timestamp"]):
                 self.actuate(self.schedule[self.scheduleIndex]["index"])
@@ -361,6 +367,7 @@ class CameraManager:
     def __init__(self, settings):
         debug("Creating camera manager...", 1)
         self.light = settings['light']
+        self.otherLights = settings["otherLights"]
         self.camera = PiCamera()
         self.camera.resolution = settings["resolution"]
         if settings["path"][-1] is not '/':
@@ -370,13 +377,21 @@ class CameraManager:
         self.lastCapture = 0
     def capture(self):
         if(time() - self.lastCapture > self.delta):
-            if(self.light is not None and self.light.trajectory is not 0):
+            if(self.light is not None self.light.trajectory is not 0):
+                temp1 = self.light.trajectory
+                temp2 = []
                 self.light.actuate(0)
+                if self.otherLights is not None:
+                    for light in self.otherLights:
+                        temp2.append(light.trajectory)
+                        light.actuate(2)
                 self._capture()
-                self.light.actuate(1)
+                self.light.actuate(temp1)
+                if self.otherLights is not None:
+                    for light in self.otherLights:
+                        light.actuate(temp2[self.otherLights.index(light)])
             else:
                 self._capture()
-            self.lastCapture = time()
     def _capture(self):
         debug("Capturing an image!", 1)
         self.camera.start_preview()
@@ -387,6 +402,7 @@ class CameraManager:
             debug("Error capturing photo: {}".format(e), 0)
         finally:
             self.camera.stop_preview()
+            self.lastCapture = time()
     def formatPath(self):
         return '{0}dave_{1}.jpg'.format(self.path, str(datetime.now()).split(".")[0].replace(' ','_'))
   

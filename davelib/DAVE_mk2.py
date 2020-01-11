@@ -6,7 +6,9 @@ from DAVE_Lib import *
 waterlevel = Button(17)
 
 #Output Pins
-growLights = DigitalOutputDevice(6)
+whiteLights = DigitalOutputDevice(6)
+redLights = DigitalOutputDevice(18)
+blueLights = DigitalOutputDevice(23)
 fans = DigitalOutputDevice(22)
 
 #1-Wire setup
@@ -66,14 +68,21 @@ evs = [
                         250),
 ]
 
+growLightSchedule = [
+                           {"index" : 0, "timestamp" : timestamp(8)},
+                           {"index" : 2, "timestamp" : timestamp(16)},
+                           {"index" : 0, "timestamp" : timestamp(2,30)},
+                           {"index" : 2, "timestamp" : timestamp(3)}
+                        ]
+
 #A schedule is a list of "index"-"delta" pairs controlling an actuator. 0-up, 1-def, 2-down
 acts = [
-    Actuator.scheduled("Lights", growLights.on, growLights.off, None, 
-                       [
-                           {"index" : 0, "timestamp" : timestamp(8)},
-                           {"index" : 2, "timestamp" : timestamp(16)}
-                        ]
-                       )
+    Actuator.scheduled("Lights - White", whiteLights.on, whiteLights.off, None, 
+                       None),
+    Actuator.scheduled("Lights - Red", redLights.on, redLights.off, None,
+                      growLightSchedule),
+    Actuator.scheduled("Lights - Blue", blueLights.on, blueLights.off, None,
+                       growLightSchedule)
     ]
 
 
@@ -81,6 +90,7 @@ acts = [
 cam = {
     "path" : '/home/pi/Desktop/dave_photos/',    #mUST end in slash
     "light" : acts[0],
+    "otherLights" : acts[1:],
     "resolution": (1280, 720),
     'delta' : 1200
 }
