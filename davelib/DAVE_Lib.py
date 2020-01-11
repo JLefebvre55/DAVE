@@ -316,7 +316,7 @@ class DBManager:
         except mariadb.Error as error:
             debug("Error connecting to database: '{}'".format(error), 0)
         self.cursor = self.database.cursor()
-        self.setupTables()
+        #self.setupTables()
         debug("Database manager created!", 3)
         self.lastUpdate = time()
     def setupTables(self):
