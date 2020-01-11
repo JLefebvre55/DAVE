@@ -202,10 +202,11 @@ class Actuator:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
         for item in schedule:
-            if datetime.now().time() < item["timestamp"]:
-                debug("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]), 1)
+            if datetime.now().time() > item["timestamp"]:
                 me.scheduleIndex = schedule.index(item)
+            else:
                 break
+        debug("Scheduler: Starting schedule for {} at item {}, actuating {}. (Now > {})".format(me.name, me.scheduleIndex, Actuator.indexToMsg(item["index"]), item["timestamp"]), 3)
         me.scheduleLastDate = datetime.now().date()
         return me
     def actuate(self, index):
@@ -220,7 +221,8 @@ class Actuator:
                 index = 1
             debug("Actuating {} {}.".format(self.name, self.indexToMsg(index)), 1)
             self.func[index](*self.args[index])
-    def indexToMsg(self, index):
+    @staticmethod
+    def indexToMsg(index):
         if index is 0: return 'up'
         elif index is 1: return 'to default'
         elif index is 2: return 'down'
@@ -236,7 +238,7 @@ class Actuator:
             debug("Scheduler: Day rollover! Resetting {} schedule.".format(self.name), 1)
             self.scheduleIndex = 0
         else:#We have reached the last item, but the day has not passed; ergo do nothing
-            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 1)
+            debug("Scheduler: Last scheduled item for {} has been performed. No action taken.".format(self.name), 3)
             
     def hold(self, time):
         debug("Holding actuator {} at state {} for {}s.".format(self.name, self.trajectory, time), 3)
