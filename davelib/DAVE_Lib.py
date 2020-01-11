@@ -377,32 +377,30 @@ class CameraManager:
         self.lastCapture = 0
     def capture(self):
         if(time() - self.lastCapture > self.delta):
-            if(self.light is not None self.light.trajectory is not 0):
+            if(self.light is not None):
                 temp1 = self.light.trajectory
-                temp2 = []
                 self.light.actuate(0)
-                if self.otherLights is not None:
-                    for light in self.otherLights:
-                        temp2.append(light.trajectory)
-                        light.actuate(2)
-                self._capture()
+            if self.otherLights is not None:
+                temp2 = []
+                for light in self.otherLights:
+                    temp2.append(light.trajectory)
+                    light.actuate(2)
+                    
+            debug("Capturing an image!", 1)
+            self.camera.start_preview() 
+            sleep(3)
+            try:
+                self.camera.capture(self.formatPath())
+            except Error as e:
+                debug("Error capturing photo: {}".format(e), 0)
+            finally:
+                self.camera.stop_preview()
+                self.lastCapture = time()
+            if self.light is not None:
                 self.light.actuate(temp1)
-                if self.otherLights is not None:
-                    for light in self.otherLights:
-                        light.actuate(temp2[self.otherLights.index(light)])
-            else:
-                self._capture()
-    def _capture(self):
-        debug("Capturing an image!", 1)
-        self.camera.start_preview()
-        sleep(3)
-        try:
-            self.camera.capture(self.formatPath())
-        except Error as e:
-            debug("Error capturing photo: {}".format(e), 0)
-        finally:
-            self.camera.stop_preview()
-            self.lastCapture = time()
+            if self.otherLights is not None:
+                for light in self.otherLights:
+                    light.actuate(temp2[self.otherLights.index(light)])
     def formatPath(self):
         return '{0}dave_{1}.jpg'.format(self.path, str(datetime.now()).split(".")[0].replace(' ','_'))
   
