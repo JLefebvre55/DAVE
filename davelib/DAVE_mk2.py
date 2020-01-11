@@ -9,6 +9,7 @@ waterlevel = Button(17)
 whiteLights = DigitalOutputDevice(6)
 redLights = DigitalOutputDevice(18)
 blueLights = DigitalOutputDevice(23)
+airCooler = DigitalOutputDevice(27)
 fans = DigitalOutputDevice(22)
 
 #1-Wire setup
