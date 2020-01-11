@@ -294,7 +294,7 @@ class EnvironmentVariable:
                 debug("'"+self.name+"' has reached optimal. "+str(self.current)+" is +-"+str(self.tolerance)+" of "+str(self.optimal)+".", 2)
             return
         elif((self.actuator.trajectory == 2 and self.current <= self.optimal) or (self.actuator.trajectory == 0 and self.current >= self.optimal)):
-                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.trajectory), 2)
+                debug("'"+self.name+"' has reached optimal. "+str(self.current)+" ~ "+str(self.optimal)+". T:"+str(self.actuator.trajectory), 2)
                 index = 1
         #Act
         self.actuator.actuate(index)
