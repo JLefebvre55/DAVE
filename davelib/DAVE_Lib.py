@@ -28,7 +28,7 @@ def separateReadDHT(a,b,c,d,e):
     else: return temp
 timems = lambda : int(time()*1000)
 
-__debugLevel__ = 0
+__debugLevel__ = 3
 __arduino__ = None
 __arduinoData__ = {}
 
@@ -211,15 +211,13 @@ class Actuator:
         else:
             debug("Schedule for actuator {} is not a list!".format(name), 0)
             raise
-
-        me.scheduleIndex = 0
         for item in schedule:
-            if datetime.now().time() < item["timestamp"]:
-                print("Scheduler: Starting schedule for {} at item {}, actuating {} at {}.".format(me.name, schedule.index(item), item["index"], item["timestamp"]))
-                me.scheduleIndex = schedule.index(item)
+            if datetime.now().time() > item["timestamp"]:
+                self.scheduleIndex = schedule.index(item)
                 break
             else:
-                debug("Skipping item {} in schedule for {} ({} > {})", 3)
+                debug("Skipping item {} in schedule for {} (Now < {})".format(schedule.index(item), name, item["timestamp"]), 3)
+        print("Scheduler: Starting schedule for {} at item {}, actuating {}. (Now > {})".format(me.name, scheduleIndex, indexToMsg(item["index"]), item["timestamp"]))
         me.scheduleLastDate = datetime.now().date()
         return me
     def actuate(self, index):
@@ -232,9 +230,10 @@ class Actuator:
             if index not in (0,1,2): 
                 debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
                 index = 1
-            debug("Actuating {} {}.".format(self.name, self.indexToMsg(index)), 1)
+            debug("Actuating {} {}.".format(self.name, Actuator.indexToMsg(index)), 1)
             self.trajectory = index
             self.func[index](*self.args[index])
+    @staticmethod
     def indexToMsg(self, index):
         if index is 0: return 'up'
         elif index is 1: return 'to default'
