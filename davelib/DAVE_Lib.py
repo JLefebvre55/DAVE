@@ -319,6 +319,7 @@ class DBManager:
         #self.setupTables()
         debug("Database manager created!", 3)
         self.lastUpdate = time()
+        self.lastBackup = time()
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 2)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
@@ -359,6 +360,13 @@ class DBManager:
                 debug("Current sensor data successfully sent to database!", 1)
                 
             self.lastUpdate = time()
+            self.backup()
+    def backup(self):
+        if(time() - self.lastBackup > self.settings["backupDelta"]):
+            os.system("sudo rm -rf {}/*".format(settings["backupPath"]))
+            os.system("sudo mariabackup --backup --target-dir={} --user={} --password={}".format(settings["backupPath"], settings["user"], settings["password"]))
+            debug("Successfully backed up database!", 1)
+            self.lastBackup = time()
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
         self.cursor.execute(command)

@@ -32,7 +32,10 @@ db = {"name" : "davedb",
                           "waterlevel_ishigh boolean NOT NULL",
                           "watertemp DECIMAL(4,2) NOT NULL",
                           "ph DECIMAL(4,2) NOT NULL",
-                          "electric_conductivity DECIMAL(6,2) NOT NULL"]
+                          "electric_conductivity DECIMAL(6,2) NOT NULL"],
+              'backupDelta' : 21600,
+              'backupPath' : '/home/pi/backup',
+              
               }
 
 ard = {
@@ -47,7 +50,7 @@ delay = 1
 evs = [
     EnvironmentVariable("Air Humidity (%H)", 80, 95, 90,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0, 0, 100), 
-                        Actuator("Exhaust Fans", None, fans.off, fans.on)),
+                        Actuator("Gas Exchange Fans", None, fans.off, fans.on)),
     EnvironmentVariable("Air Temperature (C)", 12, 15, 13.5,
                         Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1, -40, 40), 
                         Actuator("Air Cooler", None, airCooler.off, airCooler.on)),

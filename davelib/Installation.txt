@@ -8,8 +8,9 @@ sudo apt-get -y install python-mysql.connector
 sudo mysql -u root -p
 CREATE DATABASE davedb;
 CREATE USER 'dave'@'localhost' IDENTIFIED BY 'password';
-GRANT ALL PRIVILEGES ON davedb.* TO 'dave'@'localhost';
+GRANT ALL PRIVILEGES ON *.* TO 'dave'@'localhost';
 FLUSH PRIVILEGES;
+sudo apt-get install mariadb-backup
 
 ##TABLE SETUP##
 USE davedb;
