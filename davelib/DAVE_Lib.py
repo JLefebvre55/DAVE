@@ -360,11 +360,11 @@ class DBManager:
                 debug("Current sensor data successfully sent to database!", 1)
                 
             self.lastUpdate = time()
-            self.backup()
+        self.backup()
     def backup(self):
         if(time() - self.lastBackup > self.settings["backupDelta"]):
-            os.system("sudo rm -rf {}/*".format(settings["backupPath"]))
-            os.system("sudo mariabackup --backup --target-dir={} --user={} --password={}".format(settings["backupPath"], settings["user"], settings["password"]))
+            os.system("sudo rm -rf {}/*".format(self.settings["backupPath"]))
+            os.system("sudo mariabackup --backup --target-dir={} --user={} --password={}".format(self.settings["backupPath"], self.settings["user"], self.settings["password"]))
             debug("Successfully backed up database!", 1)
             self.lastBackup = time()
     def execute(self, command):
