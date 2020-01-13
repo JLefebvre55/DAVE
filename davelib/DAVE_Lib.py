@@ -409,6 +409,7 @@ class CameraManager:
             finally:
                 self.camera.stop_preview()
                 self.lastCapture = time()
+                sleep(1)
             if self.light is not None:
                 self.light.actuate(temp1)
             if self.otherLights is not None:
