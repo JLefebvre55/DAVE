@@ -155,8 +155,6 @@ class Sensor:
             temp = self.func(*self.args)
             if temp is None: 
                 debug("Sensor {} read as None; is this supposed to happen?".format(self.name), 0)
-
-            
             self.lastread = timems()
             debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
@@ -166,7 +164,7 @@ class Sensor:
 #pass
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
-    def __init__(self, name, funcUp, funcDefault, funcDown, args0 = [], args1 = [], args2 = []):
+    def __init__(self, name, funcUp, funcDefault, funcDown, args0 = [], args1 = [], args2 = [], passActuator = (False, False, False)):
         self.name = name
         if funcDefault is None:
             debug("No default action for actuator '{}' is defined!".format(name), 0)
@@ -180,6 +178,7 @@ class Actuator:
         self.func = (funcUp, funcDefault, funcDown)
         #Arg settings
         self.args = (args0, args1, args2)
+        self.passActuator = passActuator
         #Will always be false unless set elsewhere
         self.busy = False
         #Do default state
@@ -229,9 +228,12 @@ class Actuator:
             if index not in (0,1,2): 
                 debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
                 index = 1
+            args = self.args[index]
+            if self.passActuator[index]:
+                args.append(self)
             debug("Actuating {} {}.".format(self.name, Actuator.indexToMsg(index)), 1)
             self.trajectory = index
-            self.func[index](*self.args[index])
+            self.func[index](*args)
     @staticmethod
     def indexToMsg(index):
         if index is 0: return 'up'
