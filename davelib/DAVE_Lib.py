@@ -155,8 +155,6 @@ class Sensor:
             temp = self.func(*self.args)
             if temp is None: 
                 debug("Sensor {} read as None; is this supposed to happen?".format(self.name), 0)
-
-            
             self.lastread = timems()
             debug("Sensor '"+self.name+"' raw state: "+formatState(str(temp)), 2)
             return temp
@@ -166,7 +164,7 @@ class Sensor:
 #pass
 #Handles environment variable adjustments in both the up (current < max) and down (current > max) directions, as well as when in range (usually turn things off)
 class Actuator:
-    def __init__(self, name, funcUp, funcDefault, funcDown, args0 = [], args1 = [], args2 = []):
+    def __init__(self, name, funcUp, funcDefault, funcDown, args0 = [], args1 = [], args2 = [], passActuator = (False, False, False)):
         self.name = name
         if funcDefault is None:
             debug("No default action for actuator '{}' is defined!".format(name), 0)
@@ -180,6 +178,7 @@ class Actuator:
         self.func = (funcUp, funcDefault, funcDown)
         #Arg settings
         self.args = (args0, args1, args2)
+        self.passActuator = passActuator
         #Will always be false unless set elsewhere
         self.busy = False
         #Do default state
@@ -229,9 +228,12 @@ class Actuator:
             if index not in (0,1,2): 
                 debug("Invalid actuation index of {} detected! Defaulting.".format(index), 0)
                 index = 1
+            args = self.args[index]
+            if self.passActuator[index]:
+                args.append(self)
             debug("Actuating {} {}.".format(self.name, Actuator.indexToMsg(index)), 1)
             self.trajectory = index
-            self.func[index](*self.args[index])
+            self.func[index](*args)
     @staticmethod
     def indexToMsg(index):
         if index is 0: return 'up'
@@ -316,9 +318,10 @@ class DBManager:
         except mariadb.Error as error:
             debug("Error connecting to database: '{}'".format(error), 0)
         self.cursor = self.database.cursor()
-        self.setupTables()
+        #self.setupTables()
         debug("Database manager created!", 3)
         self.lastUpdate = time()
+        self.lastBackup = time()
     def setupTables(self):
         debug("Setting up DB tables. Columns:", 2)
         command = "CREATE TABLE IF NOT EXISTS sensordata("
@@ -359,9 +362,17 @@ class DBManager:
                 debug("Current sensor data successfully sent to database!", 1)
                 
             self.lastUpdate = time()
+        self.backup()
+    def backup(self):
+        if(time() - self.lastBackup > self.settings["backupDelta"]):
+            os.system("sudo rm -rf {}/*".format(self.settings["backupPath"]))
+            os.system("sudo mariabackup --backup --target-dir={} --user={} --password={}".format(self.settings["backupPath"], self.settings["user"], self.settings["password"]))
+            debug("Successfully backed up database!", 1)
+            self.lastBackup = time()
     def execute(self, command):
         debug("Executing MySQL commmand: "+command, 3)
         self.cursor.execute(command)
+        self.database.commit()
 
 #pass
 #Manages camera interactions (taking photos and the like)
@@ -398,6 +409,7 @@ class CameraManager:
             finally:
                 self.camera.stop_preview()
                 self.lastCapture = time()
+                sleep(1)
             if self.light is not None:
                 self.light.actuate(temp1)
             if self.otherLights is not None:

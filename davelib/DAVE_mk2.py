@@ -11,6 +11,7 @@ redLights = DigitalOutputDevice(18)
 blueLights = DigitalOutputDevice(23)
 fans = DigitalOutputDevice(22)
 airCooler = DigitalOutputDevice(27)
+pump = DigitalOutputDevice(24)
 
 #1-Wire setup
 os.system('modprobe w1-gpio')    #1-W setup
@@ -32,7 +33,10 @@ db = {"name" : "davedb",
                           "waterlevel_ishigh boolean NOT NULL",
                           "watertemp DECIMAL(4,2) NOT NULL",
                           "ph DECIMAL(4,2) NOT NULL",
-                          "electric_conductivity DECIMAL(6,2) NOT NULL"]
+                          "electric_conductivity DECIMAL(6,2) NOT NULL"],
+              'backupDelta' : 21600,
+              'backupPath' : '/home/pi/backup',
+              
               }
 
 ard = {
@@ -47,14 +51,13 @@ delay = 1
 evs = [
     EnvironmentVariable("Air Humidity (%H)", 80, 95, 90,
                         Sensor("DHT-Humidity", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 0, 0, 100), 
-                        Actuator("Exhaust Fans", None, fans.off, fans.on)),
+                        Actuator("Gas Exchange Fans", None, fans.off, fans.on)),
     EnvironmentVariable("Air Temperature (C)", 12, 15, 13.5,
                         Sensor("DHT-Temperature", 4000, separateReadDHT, Adafruit_DHT.DHT22, 13, 1, -40, 40), 
                         Actuator("Air Cooler", None, airCooler.off, airCooler.on)),
-    EnvironmentVariable.noActuator("Water Level (1Hi, 0Lo)", 0, 1, 1,
+    EnvironmentVariable("Water Level (1Hi, 0Lo)", 0, 1, 1,
                         Sensor("Float Sensor", 500, getSensorValue, waterlevel), 
-                        0),
-                        #Actuator("Water In Pump", (lambda a : (pumpWaterIn.on(), a.hold(30))), pumpWaterIn.off, None, passActuator = (True, False, False))),
+                        Actuator("Water In Pump", (lambda a : (pump.on(), a.hold(120))), pump.off, None, passActuator = (True, False, False))),
     EnvironmentVariable.noActuator("Water Temperature (C)", 9, 12, 10,
                         Sensor("Water Thermometer", 1000, read1Wire, wirefilesrc, 't='),
                         2),
